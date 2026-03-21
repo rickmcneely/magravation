@@ -106,7 +106,7 @@ func (b *Board) addHoleGrid(gx, gy float64, htype HoleType, player int) {
 // Arms at 90° intervals (N, E, S, W).
 // Each arm is 3 holes wide, extending 7 units from center.
 // Track runs along outer two columns; home row along center.
-// Bases (4 holes each) in the concave corners between arms.
+// Bases (5 holes each, in a line) in the concave corners between arms.
 
 func (b *Board) generate4Player() {
 	s := b.Params.GridSpacing()
@@ -129,9 +129,9 @@ func (b *Board) generate4Player() {
 	// Start position: right column at row 6 (just before tip)
 	startPos := [2]float64{1, 6}
 
-	// Base template: 2×2 grid in the CW corner (between this arm and next CW arm).
-	// For the +Y arm, the CW corner is the upper-right quadrant → positions at (3,3),(4,3),(3,4),(4,4)
-	basePositions := [][2]float64{{3, 3}, {4, 3}, {3, 4}, {4, 4}}
+	// Base template: 5 holes in a column in the CW corner (between this arm
+	// and the next CW arm). Column runs parallel to this arm at x=3.
+	basePositions := [][2]float64{{3, 2}, {3, 3}, {3, 4}, {3, 5}, {3, 6}}
 
 	for player, angle := range armAngles {
 		rot := angle - 90 // rotation from +Y template to arm direction
@@ -235,11 +235,9 @@ func (b *Board) generate6Player() {
 	// Start position: right column at row 6
 	startPos := [2]float64{1, 6}
 
-	// Base: 4 holes between this arm and the next CW arm.
-	// Placed at the angular midpoint, radius ~4.5 from center.
-	// Template: 2×2 grid centered at (2.5, 3.5) — in the CW quadrant
-	// (adjusted so they sit neatly between 60°-separated arms)
-	basePositions := [][2]float64{{2, 3}, {3, 3}, {2, 4}, {3, 4}}
+	// Base: 5 holes in a column between this arm and the next CW arm.
+	// Column at x=3.5 to clear adjacent arm track holes at 60° spacing.
+	basePositions := [][2]float64{{3.5, 2}, {3.5, 3}, {3.5, 4}, {3.5, 5}, {3.5, 6}}
 
 	for player, angle := range armAngles {
 		rot := angle - 90
