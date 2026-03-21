@@ -1,0 +1,13 @@
+# Binary (root level only)
+/magravation
+*.exe
+
+# Generated output
+*.nc
+*.svg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
