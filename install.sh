@@ -60,25 +60,13 @@ import (
 	"magravation/generate"
 )
 
-// GenerateRequest is the JSON body POSTed to /api/generate.
+// GenerateRequest is the JSON body POSTed to /api/generate and /api/preview.
 type GenerateRequest struct {
-	BoardSize      float64 `json:"boardSize"`
+	BoardDiameter  float64 `json:"boardDiameter"`
+	BoardThickness float64 `json:"boardThickness"`
 	MarbleDiameter float64 `json:"marbleDiameter"`
-	DiceSize       float64 `json:"diceSize"`
 	NumPlayers     int     `json:"numPlayers"`
-	CenterOrigin   bool    `json:"centerOrigin"`
 	OutputFormat   string  `json:"outputFormat"`
-}
-
-// GenerateResponse is the JSON response from /api/generate.
-type GenerateResponse struct {
-	GCode      string  `json:"gcode"`
-	SVG        string  `json:"svg,omitempty"`
-	BoardSize  float64 `json:"boardSize"`
-	NumHoles   int     `json:"numHoles"`
-	HoleDiam   float64 `json:"holeDiam"`
-	HoleDepth  float64 `json:"holeDepth"`
-	Error      string  `json:"error,omitempty"`
 }
 
 // NewApp returns an http.Handler for the Magravation web app.
@@ -106,26 +94,30 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			return p, "", fmt.Errorf("invalid JSON: %w", err)
 		}
-		if req.BoardSize > 0 {
-			p.BoardSize = req.BoardSize
+		if req.BoardDiameter > 0 {
+			p.BoardDiameter = req.BoardDiameter
+		}
+		if req.BoardThickness > 0 {
+			p.BoardThickness = req.BoardThickness
 		}
 		if req.MarbleDiameter > 0 {
 			p.MarbleDiameter = req.MarbleDiameter
 		}
-		if req.DiceSize > 0 {
-			p.DiceSize = req.DiceSize
-		}
 		if req.NumPlayers > 0 {
 			p.NumPlayers = req.NumPlayers
 		}
-		p.CenterOrigin = req.CenterOrigin
 		if req.OutputFormat != "" {
 			outputFormat = req.OutputFormat
 		}
 	} else {
-		if v := r.URL.Query().Get("boardSize"); v != "" {
+		if v := r.URL.Query().Get("boardDiameter"); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.BoardSize = f
+				p.BoardDiameter = f
+			}
+		}
+		if v := r.URL.Query().Get("boardThickness"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.BoardThickness = f
 			}
 		}
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
@@ -133,18 +125,10 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 				p.MarbleDiameter = f
 			}
 		}
-		if v := r.URL.Query().Get("diceSize"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.DiceSize = f
-			}
-		}
 		if v := r.URL.Query().Get("numPlayers"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil {
 				p.NumPlayers = n
 			}
-		}
-		if r.URL.Query().Get("centerOrigin") == "true" {
-			p.CenterOrigin = true
 		}
 		if v := r.URL.Query().Get("outputFormat"); v != "" {
 			outputFormat = v
@@ -175,9 +159,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	case "ballend":
 		content = gcode.BallEnd
 		filename = "aggravation_ballend.nc"
-	case "straight":
-		content = gcode.Straight
-		filename = "aggravation_straight.nc"
 	case "vbit":
 		content = gcode.VBit
 		filename = "aggravation_vbit.nc"
@@ -213,11 +194,10 @@ func handlePreview(w http.ResponseWriter, r *http.Request) {
 func handleDefaults(w http.ResponseWriter, r *http.Request) {
 	p := generate.DefaultParams()
 	resp := GenerateRequest{
-		BoardSize:      p.BoardSize,
+		BoardDiameter:  p.BoardDiameter,
+		BoardThickness: p.BoardThickness,
 		MarbleDiameter: p.MarbleDiameter,
-		DiceSize:       p.DiceSize,
 		NumPlayers:     p.NumPlayers,
-		CenterOrigin:   p.CenterOrigin,
 		OutputFormat:   "combined",
 	}
 	w.Header().Set("Content-Type", "application/json")

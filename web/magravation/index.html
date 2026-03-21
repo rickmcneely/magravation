@@ -45,10 +45,10 @@
         .stat .label { font-size: 0.75em; color: #888; }
         .stat .value { font-size: 1.1em; color: #e6b800; font-weight: 600; }
 
-        .tool-info { margin-top: 16px; }
-        .tool-info h3 { font-size: 0.9em; color: #888; margin-bottom: 8px; }
         .tool-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #0a0e27; font-size: 0.85em; }
         .tool-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+        .note { background: #0a0e27; border-left: 3px solid #e6b800; padding: 10px 14px; margin-top: 12px; font-size: 0.85em; color: #aaa; border-radius: 0 6px 6px 0; }
 
         #error { display: none; background: #5c1a1a; border: 1px solid #8b2020; padding: 10px; border-radius: 6px; margin-top: 12px; }
     </style>
@@ -56,48 +56,43 @@
 <body>
     <div class="container">
         <h1>Magravation</h1>
-        <p class="subtitle">Aggravation Board Game GCode Generator for MASSO G3 CNC</p>
+        <p class="subtitle">Aggravation Board Game GCode Generator for MASSO G3 CNC - Double-Sided Round Board</p>
 
         <div class="layout">
             <div>
                 <div class="panel">
                     <h2>Board Parameters</h2>
                     <div class="form-group">
-                        <label>Board Size (inches, square)</label>
-                        <input type="number" id="boardSize" value="24" step="0.5" min="10" max="48">
-                        <div class="hint">Side length of the square board</div>
+                        <label>Board Diameter (inches)</label>
+                        <input type="number" id="boardDiameter" value="24" step="0.5" min="10" max="48">
+                        <div class="hint">Round board diameter</div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group">
+                            <label>Board Thickness (in)</label>
+                            <input type="number" id="boardThickness" value="0.75" step="0.0625" min="0.5" max="2">
+                            <div class="hint">3/4" = 0.75</div>
+                        </div>
                         <div class="form-group">
                             <label>Marble Diameter (in)</label>
                             <input type="number" id="marbleDiameter" value="0.625" step="0.0625" min="0.25" max="2">
                             <div class="hint">5/8" = 0.625</div>
                         </div>
-                        <div class="form-group">
-                            <label>Dice Size (in)</label>
-                            <input type="number" id="diceSize" value="0.625" step="0.0625" min="0.25" max="2">
-                            <div class="hint">Side length</div>
-                        </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Players</label>
-                            <select id="numPlayers">
-                                <option value="4" selected>4 Players</option>
-                                <option value="6">6 Players</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Origin</label>
-                            <select id="centerOrigin">
-                                <option value="true" selected>Center</option>
-                                <option value="false">Bottom-Left</option>
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label>Side to Generate</label>
+                        <select id="numPlayers">
+                            <option value="4" selected>4 Players (Side A)</option>
+                            <option value="6">6 Players (Side B)</option>
+                        </select>
                     </div>
 
                     <div class="btn-group">
                         <button class="btn btn-primary" onclick="updatePreview()">Update Preview</button>
+                    </div>
+
+                    <div class="note">
+                        Double-sided board: cut 4-player on one side, flip, and cut 6-player on the other. Origin is always board center.
                     </div>
 
                     <div id="error"></div>
@@ -110,7 +105,6 @@
                         <select id="outputFormat">
                             <option value="combined">Combined (all tools, single file)</option>
                             <option value="ballend">Ball End Mill only (marble holes)</option>
-                            <option value="straight">Straight Bit only (dice pockets)</option>
                             <option value="vbit">V-Bit only (text engraving)</option>
                         </select>
                     </div>
@@ -127,12 +121,8 @@
                         <div><strong>T1:</strong> 1/4" Ball End Mill &mdash; Marble holes</div>
                     </div>
                     <div class="tool-item">
-                        <div class="tool-dot" style="background: #43a047;"></div>
-                        <div><strong>T2:</strong> 1/8" Straight Bit &mdash; Dice pockets</div>
-                    </div>
-                    <div class="tool-item">
                         <div class="tool-dot" style="background: #1e88e5;"></div>
-                        <div><strong>T3:</strong> 60&deg; V-Bit &mdash; Text engraving</div>
+                        <div><strong>T2:</strong> 60&deg; V-Bit &mdash; Text engraving</div>
                     </div>
                 </div>
 
@@ -159,11 +149,10 @@
     <script>
         function getParams() {
             return {
-                boardSize: parseFloat(document.getElementById('boardSize').value),
+                boardDiameter: parseFloat(document.getElementById('boardDiameter').value),
+                boardThickness: parseFloat(document.getElementById('boardThickness').value),
                 marbleDiameter: parseFloat(document.getElementById('marbleDiameter').value),
-                diceSize: parseFloat(document.getElementById('diceSize').value),
                 numPlayers: parseInt(document.getElementById('numPlayers').value),
-                centerOrigin: document.getElementById('centerOrigin').value === 'true',
                 outputFormat: document.getElementById('outputFormat').value
             };
         }
@@ -198,20 +187,18 @@
                 const svg = await resp.text();
                 document.getElementById('previewContainer').innerHTML = svg;
 
-                // Update stats
                 const md = params.marbleDiameter;
                 const clearance = 0.03125;
                 const wallMin = 0.1875;
                 const holeDiam = md + clearance;
-                const holeDepth = md * 0.55;
+                const holeDepth = md * 0.50;
                 const spacing = holeDiam + wallMin;
 
                 document.getElementById('statHoleDiam').textContent = holeDiam.toFixed(4) + '"';
                 document.getElementById('statHoleDepth').textContent = holeDepth.toFixed(4) + '"';
                 document.getElementById('statSpacing').textContent = spacing.toFixed(4) + '"';
 
-                // Count holes from SVG circles
-                const circles = document.getElementById('previewContainer').querySelectorAll('circle');
+                const circles = document.getElementById('previewContainer').querySelectorAll('circle:not(:first-child)');
                 document.getElementById('statHoles').textContent = circles.length;
 
             } catch (err) {
@@ -282,7 +269,6 @@
             }
         }
 
-        // Auto-generate preview on load
         window.addEventListener('load', updatePreview);
     </script>
 </body>
