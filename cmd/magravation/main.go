@@ -1,15 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"magravation/internal/magravation"
+	"magravation/generate"
 )
 
 func main() {
@@ -37,14 +39,14 @@ func main() {
 	}
 
 	// CLI mode
-	p := magravation.DefaultParams()
+	p := generate.DefaultParams()
 	p.BoardSize = *boardSize
 	p.MarbleDiameter = *marbleDiam
 	p.DiceSize = *diceSize
 	p.NumPlayers = *numPlayers
 	p.CenterOrigin = *centerOrigin
 
-	board, err := magravation.GenerateBoard(p)
+	board, err := generate.GenerateBoard(p)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -64,7 +66,7 @@ func main() {
 	fmt.Println()
 
 	if *previewOnly {
-		svg := magravation.GenerateSVG(board)
+		svg := generate.GenerateSVG(board)
 		svgFile := *output + ".svg"
 		if err := os.WriteFile(svgFile, []byte(svg), 0644); err != nil {
 			log.Fatalf("Error writing SVG: %v", err)
@@ -73,7 +75,7 @@ func main() {
 		return
 	}
 
-	gcode := magravation.GenerateGCode(board)
+	gcode := generate.GenerateGCode(board)
 
 	if *splitFiles {
 		files := map[string]string{
@@ -99,7 +101,7 @@ func main() {
 	}
 
 	// Also generate SVG preview
-	svg := magravation.GenerateSVG(board)
+	svg := generate.GenerateSVG(board)
 	svgFile := *output + ".svg"
 	if err := os.WriteFile(svgFile, []byte(svg), 0644); err != nil {
 		log.Printf("Warning: could not write SVG preview: %v", err)
@@ -116,10 +118,8 @@ func originStr(center bool) string {
 }
 
 func runWeb(port string) {
-	// Find web directory
 	webDir := "./web/magravation"
 	if _, err := os.Stat(webDir); os.IsNotExist(err) {
-		// Try relative to executable
 		exe, _ := os.Executable()
 		webDir = filepath.Join(filepath.Dir(exe), "web", "magravation")
 	}
@@ -128,6 +128,149 @@ func runWeb(port string) {
 	fmt.Printf("  Static files: %s\n", webDir)
 	fmt.Printf("  Listening on: http://localhost:%s\n", port)
 
-	handler := magravation.NewApp("/")
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/generate", handleGenerate)
+	mux.HandleFunc("/api/preview", handlePreview)
+	mux.HandleFunc("/api/defaults", handleDefaults)
+	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+
+	log.Fatal(http.ListenAndServe(":"+port, mux))
+}
+
+// --- Web handlers (standalone mode) ---
+
+type generateRequest struct {
+	BoardSize      float64 `json:"boardSize"`
+	MarbleDiameter float64 `json:"marbleDiameter"`
+	DiceSize       float64 `json:"diceSize"`
+	NumPlayers     int     `json:"numPlayers"`
+	CenterOrigin   bool    `json:"centerOrigin"`
+	OutputFormat   string  `json:"outputFormat"`
+}
+
+func parseRequest(r *http.Request) (generate.Params, string, error) {
+	p := generate.DefaultParams()
+	outputFormat := "combined"
+
+	if r.Method == http.MethodPost {
+		var req generateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return p, "", fmt.Errorf("invalid JSON: %w", err)
+		}
+		if req.BoardSize > 0 {
+			p.BoardSize = req.BoardSize
+		}
+		if req.MarbleDiameter > 0 {
+			p.MarbleDiameter = req.MarbleDiameter
+		}
+		if req.DiceSize > 0 {
+			p.DiceSize = req.DiceSize
+		}
+		if req.NumPlayers > 0 {
+			p.NumPlayers = req.NumPlayers
+		}
+		p.CenterOrigin = req.CenterOrigin
+		if req.OutputFormat != "" {
+			outputFormat = req.OutputFormat
+		}
+	} else {
+		if v := r.URL.Query().Get("boardSize"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.BoardSize = f
+			}
+		}
+		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.MarbleDiameter = f
+			}
+		}
+		if v := r.URL.Query().Get("diceSize"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.DiceSize = f
+			}
+		}
+		if v := r.URL.Query().Get("numPlayers"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				p.NumPlayers = n
+			}
+		}
+		if r.URL.Query().Get("centerOrigin") == "true" {
+			p.CenterOrigin = true
+		}
+		if v := r.URL.Query().Get("outputFormat"); v != "" {
+			outputFormat = v
+		}
+	}
+
+	return p, outputFormat, nil
+}
+
+func handleGenerate(w http.ResponseWriter, r *http.Request) {
+	p, outputFormat, err := parseRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	board, err := generate.GenerateBoard(p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	gcode := generate.GenerateGCode(board)
+
+	var content string
+	var filename string
+	switch outputFormat {
+	case "ballend":
+		content = gcode.BallEnd
+		filename = "aggravation_ballend.nc"
+	case "straight":
+		content = gcode.Straight
+		filename = "aggravation_straight.nc"
+	case "vbit":
+		content = gcode.VBit
+		filename = "aggravation_vbit.nc"
+	default:
+		content = gcode.Combined
+		filename = "aggravation.nc"
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	fmt.Fprint(w, content)
+}
+
+func handlePreview(w http.ResponseWriter, r *http.Request) {
+	p, _, err := parseRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	board, err := generate.GenerateBoard(p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	svg := generate.GenerateSVG(board)
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	fmt.Fprint(w, svg)
+}
+
+func handleDefaults(w http.ResponseWriter, r *http.Request) {
+	p := generate.DefaultParams()
+	resp := generateRequest{
+		BoardSize:      p.BoardSize,
+		MarbleDiameter: p.MarbleDiameter,
+		DiceSize:       p.DiceSize,
+		NumPlayers:     p.NumPlayers,
+		CenterOrigin:   p.CenterOrigin,
+		OutputFormat:   "combined",
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }

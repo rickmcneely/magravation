@@ -1,4 +1,4 @@
-package magravation
+package generate
 
 // Stroke font for CNC text engraving.
 // Each glyph is defined as a series of strokes (polylines).

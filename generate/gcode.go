@@ -1,4 +1,4 @@
-package magravation
+package generate
 
 import (
 	"fmt"

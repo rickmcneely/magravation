@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# Magravation – CharmToolWeb Integration Installer
+#
+# Integrates the Magravation web app into the CharmToolWeb
+# webserver, then optionally deploys to the Hostinger server.
+#
+# What it does:
+#   1. Creates internal/magravation/handler.go in CharmToolWeb
+#   2. Copies web/magravation/ static files to CharmToolWeb
+#   3. Adds magravation to CharmToolWeb go.mod (replace directive)
+#   4. Registers the /magravation/ route in cmd/webserver/main.go
+#   5. Runs go mod tidy to verify the build
+#   6. Optionally deploys via deploy.sh
+#
+# Usage:
+#   ./install.sh                # integrate only
+#   ./install.sh --deploy       # integrate + deploy to production
+# ============================================================
+
+MAGRAVATION_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHARMTOOL_DIR="/home/zditech/CharmToolWeb"
+
+DEPLOY=false
+if [[ "${1:-}" == "--deploy" ]]; then
+    DEPLOY=true
+fi
+
+echo "==> Magravation → CharmToolWeb Installer"
+echo "    Magravation: ${MAGRAVATION_DIR}"
+echo "    CharmToolWeb: ${CHARMTOOL_DIR}"
+echo ""
+
+# Verify CharmToolWeb exists
+if [[ ! -f "${CHARMTOOL_DIR}/go.mod" ]]; then
+    echo "ERROR: CharmToolWeb not found at ${CHARMTOOL_DIR}"
+    exit 1
+fi
+
+# ──────────────────────────────────────────────
+# Step 1: Create the HTTP handler wrapper
+# ──────────────────────────────────────────────
+echo "==> Step 1: Creating handler in CharmToolWeb/internal/magravation/"
+mkdir -p "${CHARMTOOL_DIR}/internal/magravation"
+
+cat > "${CHARMTOOL_DIR}/internal/magravation/handler.go" << 'GOEOF'
+// Package magravation provides an HTTP handler for the Magravation
+// Aggravation board game G-code generator web app.
+package magravation
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"path/filepath"
+	"strconv"
+
+	"magravation/generate"
+)
+
+// GenerateRequest is the JSON body POSTed to /api/generate.
+type GenerateRequest struct {
+	BoardSize      float64 `json:"boardSize"`
+	MarbleDiameter float64 `json:"marbleDiameter"`
+	DiceSize       float64 `json:"diceSize"`
+	NumPlayers     int     `json:"numPlayers"`
+	CenterOrigin   bool    `json:"centerOrigin"`
+	OutputFormat   string  `json:"outputFormat"`
+}
+
+// GenerateResponse is the JSON response from /api/generate.
+type GenerateResponse struct {
+	GCode      string  `json:"gcode"`
+	SVG        string  `json:"svg,omitempty"`
+	BoardSize  float64 `json:"boardSize"`
+	NumHoles   int     `json:"numHoles"`
+	HoleDiam   float64 `json:"holeDiam"`
+	HoleDepth  float64 `json:"holeDepth"`
+	Error      string  `json:"error,omitempty"`
+}
+
+// NewApp returns an http.Handler for the Magravation web app.
+func NewApp(staticDir string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/generate", handleGenerate)
+	mux.HandleFunc("/api/preview", handlePreview)
+	mux.HandleFunc("/api/defaults", handleDefaults)
+	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
+	return mux
+}
+
+// NewAppDefault returns an http.Handler using the default static file location.
+func NewAppDefault() http.Handler {
+	staticDir := filepath.Join(".", "web", "magravation")
+	return NewApp(staticDir)
+}
+
+func parseRequest(r *http.Request) (generate.Params, string, error) {
+	p := generate.DefaultParams()
+	outputFormat := "combined"
+
+	if r.Method == http.MethodPost {
+		var req GenerateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return p, "", fmt.Errorf("invalid JSON: %w", err)
+		}
+		if req.BoardSize > 0 {
+			p.BoardSize = req.BoardSize
+		}
+		if req.MarbleDiameter > 0 {
+			p.MarbleDiameter = req.MarbleDiameter
+		}
+		if req.DiceSize > 0 {
+			p.DiceSize = req.DiceSize
+		}
+		if req.NumPlayers > 0 {
+			p.NumPlayers = req.NumPlayers
+		}
+		p.CenterOrigin = req.CenterOrigin
+		if req.OutputFormat != "" {
+			outputFormat = req.OutputFormat
+		}
+	} else {
+		if v := r.URL.Query().Get("boardSize"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.BoardSize = f
+			}
+		}
+		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.MarbleDiameter = f
+			}
+		}
+		if v := r.URL.Query().Get("diceSize"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.DiceSize = f
+			}
+		}
+		if v := r.URL.Query().Get("numPlayers"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				p.NumPlayers = n
+			}
+		}
+		if r.URL.Query().Get("centerOrigin") == "true" {
+			p.CenterOrigin = true
+		}
+		if v := r.URL.Query().Get("outputFormat"); v != "" {
+			outputFormat = v
+		}
+	}
+
+	return p, outputFormat, nil
+}
+
+func handleGenerate(w http.ResponseWriter, r *http.Request) {
+	p, outputFormat, err := parseRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	board, err := generate.GenerateBoard(p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	gcode := generate.GenerateGCode(board)
+
+	var content string
+	var filename string
+	switch outputFormat {
+	case "ballend":
+		content = gcode.BallEnd
+		filename = "aggravation_ballend.nc"
+	case "straight":
+		content = gcode.Straight
+		filename = "aggravation_straight.nc"
+	case "vbit":
+		content = gcode.VBit
+		filename = "aggravation_vbit.nc"
+	default:
+		content = gcode.Combined
+		filename = "aggravation.nc"
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	fmt.Fprint(w, content)
+}
+
+func handlePreview(w http.ResponseWriter, r *http.Request) {
+	p, _, err := parseRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	board, err := generate.GenerateBoard(p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	svg := generate.GenerateSVG(board)
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	fmt.Fprint(w, svg)
+}
+
+func handleDefaults(w http.ResponseWriter, r *http.Request) {
+	p := generate.DefaultParams()
+	resp := GenerateRequest{
+		BoardSize:      p.BoardSize,
+		MarbleDiameter: p.MarbleDiameter,
+		DiceSize:       p.DiceSize,
+		NumPlayers:     p.NumPlayers,
+		CenterOrigin:   p.CenterOrigin,
+		OutputFormat:   "combined",
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+GOEOF
+echo "    Created handler.go"
+
+# ──────────────────────────────────────────────
+# Step 2: Copy static web files
+# ──────────────────────────────────────────────
+echo "==> Step 2: Copying web/magravation/ static files"
+mkdir -p "${CHARMTOOL_DIR}/web/magravation"
+cp -r "${MAGRAVATION_DIR}/web/magravation/"* "${CHARMTOOL_DIR}/web/magravation/"
+echo "    Copied to ${CHARMTOOL_DIR}/web/magravation/"
+
+# ──────────────────────────────────────────────
+# Step 3: Add magravation to go.mod
+# ──────────────────────────────────────────────
+echo "==> Step 3: Updating go.mod"
+cd "${CHARMTOOL_DIR}"
+
+# Add require if not present
+if ! grep -q 'magravation' go.mod; then
+    # Add require
+    sed -i '/^require (/a\\tmagravation v0.0.0' go.mod
+    # Add replace directive
+    echo "" >> go.mod
+    echo "replace magravation => ../magravation" >> go.mod
+    echo "    Added magravation dependency to go.mod"
+else
+    echo "    magravation already in go.mod (skipped)"
+fi
+
+# ──────────────────────────────────────────────
+# Step 4: Register route in cmd/webserver/main.go
+# ──────────────────────────────────────────────
+echo "==> Step 4: Registering /magravation/ route in webserver"
+MAIN_GO="${CHARMTOOL_DIR}/cmd/webserver/main.go"
+
+# Add import if not present
+if ! grep -q '"charmtool/internal/magravation"' "${MAIN_GO}"; then
+    # Add import line after the last existing charmtool import
+    sed -i '/"charmtool\/internal\/mlint"/a\\t"charmtool/internal/magravation"' "${MAIN_GO}"
+    echo "    Added import"
+else
+    echo "    Import already present (skipped)"
+fi
+
+# Add route mount if not present
+if ! grep -q '/magravation/' "${MAIN_GO}"; then
+    # Insert the magravation mount block after the mlint block
+    sed -i '/apps = append(apps, App{/{N;N;N;N;}' "${MAIN_GO}"  # normalize
+
+    # Find the line with "Landing page" comment and insert before it
+    MOUNT_BLOCK='	// --- Magravation mounted at /magravation/ ---\
+	magravationApp := magravation.NewAppDefault()\
+	mux.Handle("/magravation/", http.StripPrefix("/magravation", magravationApp))\
+	apps = append(apps, App{\
+		Name:        "Magravation",\
+		Path:        "/magravation/",\
+		Description: "Generate Aggravation board game G-code for Masso CNC router",\
+	})\
+'
+    sed -i "/\/\/ Landing page/i\\${MOUNT_BLOCK}" "${MAIN_GO}"
+    echo "    Added route mount"
+else
+    echo "    Route already registered (skipped)"
+fi
+
+# ──────────────────────────────────────────────
+# Step 5: Build verification
+# ──────────────────────────────────────────────
+echo "==> Step 5: Running go mod tidy and build verification"
+cd "${CHARMTOOL_DIR}"
+go mod tidy
+go build ./cmd/webserver/
+echo "    Build successful!"
+
+# Clean up build artifact
+rm -f webserver
+
+# ──────────────────────────────────────────────
+# Step 6: Deploy (optional)
+# ──────────────────────────────────────────────
+if [[ "$DEPLOY" == true ]]; then
+    echo ""
+    echo "==> Step 6: Deploying to production..."
+    cd "${CHARMTOOL_DIR}"
+    ./deploy.sh
+else
+    echo ""
+    echo "==> Installation complete!"
+    echo ""
+    echo "    To test locally:"
+    echo "      cd ${CHARMTOOL_DIR}"
+    echo "      go run ./cmd/webserver"
+    echo "      # Visit http://localhost:8080/magravation/"
+    echo ""
+    echo "    To deploy to production:"
+    echo "      cd ${CHARMTOOL_DIR}"
+    echo "      ./deploy.sh"
+    echo "    Or re-run this script:"
+    echo "      ./install.sh --deploy"
+fi
