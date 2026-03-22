@@ -69,17 +69,13 @@ func StationBaseY(n int) float64 {
 	return 2.0/math.Tan(math.Pi/float64(n)) + 5.0
 }
 
-// MaxRadiusForPlayers returns the distance (inches) from board center to the
-// farthest hole. The farthest holes are the base row corners at (±2, baseY).
-func MaxRadiusForPlayers(numPlayers int, marbleDiameter float64) float64 {
-	d := 1.75 * marbleDiameter
-	baseY := StationBaseY(numPlayers)
-	return math.Sqrt(4+baseY*baseY) * d
-}
-
+// MinBoardDiameterForPlayers returns the minimum board diameter:
+//   2 * (distance_0_to_i + 2 * marbleDiameter * 1.5)
+// where distance_0_to_i = baseY * gridSpacing.
 func MinBoardDiameterForPlayers(numPlayers int, marbleDiameter float64) float64 {
-	em := 2.5 * marbleDiameter
-	return 2 * (MaxRadiusForPlayers(numPlayers, marbleDiameter) + em)
+	d := 1.75 * marbleDiameter
+	distToI := StationBaseY(numPlayers) * d
+	return 2 * (distToI + 2*marbleDiameter*1.5)
 }
 
 func (p Params) MinBoardDiameter() float64 {
