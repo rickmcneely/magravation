@@ -324,14 +324,10 @@ func (b *Board) addBoardText(d float64) {
 		rad := angle * math.Pi / 180
 		tx := textR * math.Cos(rad)
 		ty := textR * math.Sin(rad)
-		// Text reads left-to-right when viewed from the player's position
-		// (sitting outside the board, looking toward center).
-		// The arm points at 'angle' from center outward.
-		// Player faces inward → text baseline perpendicular to arm,
-		// bottom toward player (m side), top toward center (0 side).
-		// Rotation = angle + 90° makes text baseline cross the arm,
-		// readable from the player's side.
-		textAngle := angle + 90
+		// Text baseline parallel to the c-c line (perpendicular to arm).
+		// armAngle - 90 aligns text along the c-c direction, readable
+		// right-side-up from the player's seated position looking down.
+		textAngle := angle - 90
 		b.TextItems = append(b.TextItems, TextItem{
 			X: tx, Y: ty, Text: "Wahoo!",
 			Height:   textHeight,

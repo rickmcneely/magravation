@@ -311,8 +311,15 @@ func GenerateSVG(board *Board) string {
 		if text.CenterOn {
 			anchor = "middle"
 		}
-		fmt.Fprintf(&sb, `<text x="%.1f" y="%.1f" font-family="sans-serif" font-size="%.1f" fill="#333" text-anchor="%s">%s</text>`,
-			sx, sy, fontSize, anchor, text.Text)
+		// SVG Y is flipped, so negate the rotation angle
+		svgAngle := -text.Angle
+		if text.Angle != 0 {
+			fmt.Fprintf(&sb, `<text x="%.1f" y="%.1f" font-family="sans-serif" font-size="%.1f" fill="#333" text-anchor="%s" transform="rotate(%.1f,%.1f,%.1f)">%s</text>`,
+				sx, sy, fontSize, anchor, svgAngle, sx, sy, text.Text)
+		} else {
+			fmt.Fprintf(&sb, `<text x="%.1f" y="%.1f" font-family="sans-serif" font-size="%.1f" fill="#333" text-anchor="%s">%s</text>`,
+				sx, sy, fontSize, anchor, text.Text)
+		}
 		fmt.Fprintf(&sb, "\n")
 	}
 
