@@ -54,9 +54,9 @@
                     <h2>Board Parameters</h2>
 
                     <div class="form-group">
-                        <label>Marble Diameter (inches)</label>
-                        <input type="number" id="marbleDiameter" value="0.625" step="0.0625" min="0.25" max="2">
-                        <div class="hint">5/8" = 0.625, 3/4" = 0.75, 1" = 1.0</div>
+                        <label>Marble Diameter</label>
+                        <input type="text" id="marbleDiameter" value="0.625">
+                        <div class="hint">Imperial (inches): 0.625, 0.75, 1.0 &mdash; Metric: 16mm, 19mm, 25mm</div>
                     </div>
 
                     <div class="form-group">
@@ -99,10 +99,15 @@
                         <div class="warning" id="diamWarning">Board diameter is less than the calculated minimum!</div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Font Size (inches, 0 = auto)</label>
-                        <input type="number" id="fontSize" value="0" step="0.05" min="0" max="3">
-                        <div class="hint">Character height for "Wahoo!" text. 0 = auto-size</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Font Size A (in, 0=auto)</label>
+                            <input type="number" id="fontSizeA" value="0" step="0.05" min="0" max="3">
+                        </div>
+                        <div class="form-group" id="fontSizeBGroup">
+                            <label>Font Size B (in, 0=auto)</label>
+                            <input type="number" id="fontSizeB" value="0" step="0.05" min="0" max="3">
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -186,9 +191,19 @@
         function onBoardTypeChange() {
             const single = isSingleSided();
             document.getElementById('sideBGroup').style.display = single ? 'none' : '';
+            document.getElementById('fontSizeBGroup').style.display = single ? 'none' : '';
             document.getElementById('previewSideGroup').style.display = single ? 'none' : '';
             if (single) document.getElementById('previewSide').value = 'A';
             onParamChange();
+        }
+
+        // Parse marble diameter: if ends with "mm", convert to inches.
+        function parseMarbleDiameter() {
+            const raw = document.getElementById('marbleDiameter').value.trim().toLowerCase();
+            if (raw.endsWith('mm')) {
+                return parseFloat(raw) / 25.4;
+            }
+            return parseFloat(raw);
         }
 
         function getSelectedPlayers() {
@@ -196,15 +211,20 @@
             return parseInt(document.getElementById(side === 'A' ? 'sideAPlayers' : 'sideBPlayers').value);
         }
 
+        function getSelectedFontSize() {
+            const side = document.getElementById('previewSide').value;
+            return parseFloat(document.getElementById(side === 'A' ? 'fontSizeA' : 'fontSizeB').value) || 0;
+        }
+
         function getParams() {
             return {
                 boardDiameter: parseFloat(document.getElementById('boardDiameter').value),
-                marbleDiameter: parseFloat(document.getElementById('marbleDiameter').value),
+                marbleDiameter: parseMarbleDiameter(),
                 numPlayers: getSelectedPlayers(),
                 outputFormat: document.getElementById('outputFormat').value,
                 drawBorder: document.getElementById('drawBorder').checked,
                 cornerOrigin: document.getElementById('cornerOrigin').checked,
-                fontSize: parseFloat(document.getElementById('fontSize').value) || 0
+                fontSize: getSelectedFontSize()
             };
         }
 
@@ -224,7 +244,7 @@
         }
 
         function calcMinDiameter() {
-            const md = parseFloat(document.getElementById('marbleDiameter').value);
+            const md = parseMarbleDiameter();
             const sA = parseInt(document.getElementById('sideAPlayers').value);
             const single = isSingleSided();
             const sB = single ? 0 : parseInt(document.getElementById('sideBPlayers').value);
@@ -360,8 +380,10 @@
         document.getElementById('previewSide').addEventListener('change', function() { updatePreview(); });
         document.getElementById('boardDiameter').addEventListener('change', function() { checkDiameterWarning(); updatePreview(); });
         document.getElementById('boardDiameter').addEventListener('input', onDiameterManualChange);
-        document.getElementById('fontSize').addEventListener('change', function() { updatePreview(); });
-        document.getElementById('fontSize').addEventListener('input', function() { updatePreview(); });
+        document.getElementById('fontSizeA').addEventListener('change', function() { updatePreview(); });
+        document.getElementById('fontSizeA').addEventListener('input', function() { updatePreview(); });
+        document.getElementById('fontSizeB').addEventListener('change', function() { updatePreview(); });
+        document.getElementById('fontSizeB').addEventListener('input', function() { updatePreview(); });
         document.getElementById('drawBorder').addEventListener('change', function() { updatePreview(); });
         document.getElementById('cornerOrigin').addEventListener('change', function() { updatePreview(); });
 
