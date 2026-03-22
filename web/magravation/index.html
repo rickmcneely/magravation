@@ -160,7 +160,6 @@
 
     <script>
         let minDiamData = null;
-        let userEditedDiameter = false;
 
         function isSingleSided() {
             return document.getElementById('boardType').value === 'single';
@@ -171,7 +170,6 @@
             document.getElementById('sideBGroup').style.display = single ? 'none' : '';
             document.getElementById('previewSideGroup').style.display = single ? 'none' : '';
             if (single) document.getElementById('previewSide').value = 'A';
-            userEditedDiameter = false;
             onParamChange();
         }
 
@@ -217,23 +215,18 @@
                             `Minimum: ${minDiamData.minDiameter}" (A: ${minDiamData.minDiameterA}", B: ${minDiamData.minDiameterB}")`;
                     }
 
-                    // Auto-fill diameter unless user has manually edited it to a LARGER value
-                    const current = parseFloat(document.getElementById('boardDiameter').value);
-                    if (!userEditedDiameter || current < minDiamData.minDiameter - 0.05) {
-                        document.getElementById('boardDiameter').value = minDiamData.minDiameter;
-                    }
+                    // Always set diameter to minimum when params change
+                    document.getElementById('boardDiameter').value = minDiamData.minDiameter;
                     checkDiameterWarning();
                 }
             } catch (err) { /* ignore */ }
         }
 
         function onParamChange() {
-            userEditedDiameter = false;
             calcMinDiameter();
         }
 
         function onDiameterManualChange() {
-            userEditedDiameter = true;
             checkDiameterWarning();
         }
 
@@ -306,9 +299,11 @@
         }
 
         document.getElementById('marbleDiameter').addEventListener('change', onParamChange);
+        document.getElementById('marbleDiameter').addEventListener('input', onParamChange);
         document.getElementById('sideAPlayers').addEventListener('change', onParamChange);
         document.getElementById('sideBPlayers').addEventListener('change', onParamChange);
         document.getElementById('boardDiameter').addEventListener('change', onDiameterManualChange);
+        document.getElementById('boardDiameter').addEventListener('input', onDiameterManualChange);
 
         window.addEventListener('load', () => { calcMinDiameter(); updatePreview(); });
     </script>
