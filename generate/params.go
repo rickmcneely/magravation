@@ -105,8 +105,8 @@ func (p Params) Validate() error {
 	if p.MarbleDiameter < 0.25 || p.MarbleDiameter > 2.0 {
 		return fmt.Errorf("marble diameter %.3f\" out of range (0.25-2.0\")", p.MarbleDiameter)
 	}
-	if p.NumPlayers < 3 || p.NumPlayers > 6 {
-		return fmt.Errorf("number of players must be 3 to 6, got %d", p.NumPlayers)
+	if p.NumPlayers < 3 || p.NumPlayers > 8 {
+		return fmt.Errorf("number of players must be 3 to 8, got %d", p.NumPlayers)
 	}
 
 	minDiam := p.MinBoardDiameter()
