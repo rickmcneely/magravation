@@ -26,6 +26,8 @@ func main() {
 	output := flag.String("output", "wahoo", "Output file prefix")
 	splitFiles := flag.Bool("split", false, "Generate separate files per tool")
 	previewOnly := flag.Bool("preview", false, "Generate SVG preview only")
+	drawBorder := flag.Bool("border", false, "Cut a decorative border circle with V-bit")
+	cornerOrigin := flag.Bool("corner-origin", false, "Origin at board corner (0,0) instead of center")
 
 	flag.Parse()
 
@@ -37,6 +39,9 @@ func main() {
 	p := generate.DefaultParams()
 	p.MarbleDiameter = *marbleDiam
 	p.NumPlayers = *numPlayers
+
+	p.DrawBorder = *drawBorder
+	p.CornerOrigin = *cornerOrigin
 
 	if *boardDiam > 0 {
 		p.BoardDiameter = *boardDiam
@@ -130,6 +135,8 @@ type generateRequest struct {
 	MarbleDiameter float64 `json:"marbleDiameter"`
 	NumPlayers     int     `json:"numPlayers"`
 	OutputFormat   string  `json:"outputFormat"`
+	DrawBorder     bool    `json:"drawBorder"`
+	CornerOrigin   bool    `json:"cornerOrigin"`
 }
 
 func parseRequest(r *http.Request) (generate.Params, string, error) {
@@ -155,6 +162,8 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		if req.OutputFormat != "" {
 			outputFormat = req.OutputFormat
 		}
+		p.DrawBorder = req.DrawBorder
+		p.CornerOrigin = req.CornerOrigin
 	} else {
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {

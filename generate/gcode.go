@@ -8,9 +8,9 @@ import (
 
 // GCodeOutput holds the generated G-code, optionally split by tool.
 type GCodeOutput struct {
-	Combined string // single file with tool changes
-	BallEnd  string // marble holes only (Tool 1)
-	VBit     string // text engraving only (Tool 2)
+	Combined string
+	BallEnd  string
+	VBit     string
 }
 
 // GenerateGCode produces G-code for the board.
@@ -18,9 +18,22 @@ func GenerateGCode(board *Board) *GCodeOutput {
 	p := board.Params
 	out := &GCodeOutput{}
 
+	// Origin offset: if CornerOrigin, shift all coords so (0,0) is
+	// at the bottom-left corner of the board's bounding circle.
+	ox, oy := 0.0, 0.0
+	if p.CornerOrigin {
+		ox = p.BoardDiameter / 2
+		oy = p.BoardDiameter / 2
+	}
+
 	var combined strings.Builder
 	var ballEnd strings.Builder
 	var vbit strings.Builder
+
+	originLabel := "Center of board"
+	if p.CornerOrigin {
+		originLabel = "Board corner (0,0 at bottom-left)"
+	}
 
 	writeHeader := func(w *strings.Builder, title string) {
 		fmt.Fprintf(w, "%%\n")
@@ -30,7 +43,11 @@ func GenerateGCode(board *Board) *GCodeOutput {
 			p.BoardDiameter, p.MarbleDiameter, p.GridSpacing())
 		fmt.Fprintf(w, "(Pocket: %.4f\" dia x %.4f\" deep, Players: %d)\n",
 			p.HoleDiameter(), p.HoleDepth(), p.NumPlayers)
-		fmt.Fprintf(w, "(Origin: Center of board)\n")
+		fmt.Fprintf(w, "(Origin: %s)\n", originLabel)
+		if p.DrawBorder {
+			fmt.Fprintf(w, "(Border: %.3f\" radius, %.4f\" deep, 0.125\" wide)\n",
+				p.BorderRadius(), p.BorderDepth())
+		}
 		fmt.Fprintf(w, "G20 (Inches)\n")
 		fmt.Fprintf(w, "G90 (Absolute positioning)\n")
 		fmt.Fprintf(w, "G17 (XY plane)\n")
@@ -42,7 +59,7 @@ func GenerateGCode(board *Board) *GCodeOutput {
 	writeFooter := func(w *strings.Builder) {
 		fmt.Fprintf(w, "G0 Z%.4f (Retract to safe height)\n", p.SafeZ)
 		fmt.Fprintf(w, "M5 (Spindle off)\n")
-		fmt.Fprintf(w, "G0 X0 Y0 (Return to origin)\n")
+		fmt.Fprintf(w, "G0 X%.4f Y%.4f (Return to origin)\n", ox, oy)
 		fmt.Fprintf(w, "M30 (Program end)\n")
 		fmt.Fprintf(w, "%%\n")
 	}
@@ -89,8 +106,8 @@ func GenerateGCode(board *Board) *GCodeOutput {
 			if hole.Player >= 0 {
 				comment += fmt.Sprintf(" P%d", hole.Player+1)
 			}
-			gcodeMarbleHole(&combined, hole, p, comment)
-			gcodeMarbleHole(&ballEnd, hole, p, comment)
+			gcodeMarbleHole(&combined, hole, p, ox, oy, comment)
+			gcodeMarbleHole(&ballEnd, hole, p, ox, oy, comment)
 		}
 	}
 
@@ -101,9 +118,9 @@ func GenerateGCode(board *Board) *GCodeOutput {
 	writeFooter(&ballEnd)
 
 	// ========================================
-	// TOOL 2: V-Bit - Text Engraving
+	// TOOL 2: V-Bit - Text Engraving + Border
 	// ========================================
-	writeHeader(&vbit, fmt.Sprintf("%.0f° V-Bit - Text Engraving", p.VBitAngle))
+	writeHeader(&vbit, fmt.Sprintf("%.0f° V-Bit - Text & Border", p.VBitAngle))
 
 	for _, w := range []*strings.Builder{&combined, &vbit} {
 		fmt.Fprintf(w, "(=== TOOL 2: %.0f° V-Bit - Text Engraving ===)\n", p.VBitAngle)
@@ -126,14 +143,35 @@ func GenerateGCode(board *Board) *GCodeOutput {
 				continue
 			}
 			for _, w := range []*strings.Builder{&combined, &vbit} {
-				fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", stroke[0].X, stroke[0].Y)
+				fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", stroke[0].X+ox, stroke[0].Y+oy)
 				fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 				fmt.Fprintf(w, "G1 Z%.4f F%.1f\n", -p.TextDepth, p.FeedRateZ)
 				for j := 1; j < len(stroke); j++ {
-					fmt.Fprintf(w, "G1 X%.4f Y%.4f F%.1f\n", stroke[j].X, stroke[j].Y, p.FeedRateXY)
+					fmt.Fprintf(w, "G1 X%.4f Y%.4f F%.1f\n", stroke[j].X+ox, stroke[j].Y+oy, p.FeedRateXY)
 				}
 				fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 			}
+		}
+	}
+
+	// Border circle
+	if p.DrawBorder {
+		borderR := p.BorderRadius()
+		borderD := p.BorderDepth()
+
+		for _, w := range []*strings.Builder{&combined, &vbit} {
+			fmt.Fprintf(w, "\n(--- Border Circle: radius %.3f\", depth %.4f\", width 0.125\" ---)\n", borderR, borderD)
+			// Position at (borderR, 0) relative to center
+			fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", borderR+ox, oy)
+			fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
+			fmt.Fprintf(w, "G1 Z%.4f F%.1f\n", -borderD, p.FeedRateZ)
+			// Full circle CCW: I = -borderR (offset to center), J = 0
+			fmt.Fprintf(w, "G3 X%.4f Y%.4f I%.4f J%.4f F%.1f\n",
+				borderR+ox, oy, -borderR, 0.0, p.FeedRateXY)
+			// Spring pass
+			fmt.Fprintf(w, "G3 X%.4f Y%.4f I%.4f J%.4f F%.1f\n",
+				borderR+ox, oy, -borderR, 0.0, p.FeedRateXY)
+			fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 		}
 	}
 
@@ -150,19 +188,19 @@ func GenerateGCode(board *Board) *GCodeOutput {
 	return out
 }
 
-// gcodeMarbleHole generates G-code for a single marble hole using helical bore.
-func gcodeMarbleHole(w *strings.Builder, hole Hole, p Params, comment string) {
+func gcodeMarbleHole(w *strings.Builder, hole Hole, p Params, ox, oy float64, comment string) {
 	toolRadius := p.BallEndDiameter / 2
 	holeRadius := hole.Diameter / 2
 	pocketRadius := holeRadius - toolRadius
 	depth := hole.Depth
+	hx := hole.X + ox
+	hy := hole.Y + oy
 
-	fmt.Fprintf(w, "(%s at X%.4f Y%.4f D%.4f Z%.4f)\n", comment, hole.X, hole.Y, hole.Diameter, -depth)
+	fmt.Fprintf(w, "(%s at X%.4f Y%.4f D%.4f Z%.4f)\n", comment, hx, hy, hole.Diameter, -depth)
 
 	if pocketRadius <= 0.005 {
-		fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", hole.X, hole.Y)
+		fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", hx, hy)
 		fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
-
 		currentZ := 0.0
 		for currentZ > -depth {
 			currentZ -= p.DepthPerPass
@@ -174,13 +212,11 @@ func gcodeMarbleHole(w *strings.Builder, hole Hole, p Params, comment string) {
 		fmt.Fprintf(w, "G4 P0.5 (Dwell)\n")
 		fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 	} else {
-		startX := hole.X + pocketRadius
-		startY := hole.Y
-
+		startX := hx + pocketRadius
+		startY := hy
 		fmt.Fprintf(w, "G0 X%.4f Y%.4f\n", startX, startY)
 		fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 		fmt.Fprintf(w, "G1 Z0.0 F%.1f\n", p.FeedRateZ)
-
 		currentZ := 0.0
 		for currentZ > -depth {
 			nextZ := currentZ - p.DepthPerPass
@@ -188,18 +224,11 @@ func gcodeMarbleHole(w *strings.Builder, hole Hole, p Params, comment string) {
 				nextZ = -depth
 			}
 			fmt.Fprintf(w, "G3 X%.4f Y%.4f I%.4f J%.4f Z%.4f F%.1f\n",
-				startX, startY,
-				-pocketRadius, 0.0,
-				nextZ, p.FeedRateXY)
+				startX, startY, -pocketRadius, 0.0, nextZ, p.FeedRateXY)
 			currentZ = nextZ
 		}
-
-		// Spring pass
 		fmt.Fprintf(w, "G3 X%.4f Y%.4f I%.4f J%.4f F%.1f\n",
-			startX, startY,
-			-pocketRadius, 0.0,
-			p.FeedRateXY)
-
+			startX, startY, -pocketRadius, 0.0, p.FeedRateXY)
 		fmt.Fprintf(w, "G0 Z%.4f\n", p.ClearanceZ)
 	}
 }
@@ -214,7 +243,7 @@ func filterHoles(holes []Hole, htype HoleType) []Hole {
 	return result
 }
 
-// GenerateSVG creates an SVG preview of the board layout (round board).
+// GenerateSVG creates an SVG preview of the board layout.
 func GenerateSVG(board *Board) string {
 	p := board.Params
 	margin := 0.5
@@ -242,7 +271,14 @@ func GenerateSVG(board *Board) string {
 		cx, cy, boardR)
 	fmt.Fprintf(&sb, "\n")
 
-	// Hole colors by type
+	// Border circle (if enabled)
+	if p.DrawBorder {
+		borderSvgR := p.BorderRadius() * scale
+		fmt.Fprintf(&sb, `<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" stroke="#6B4914" stroke-width="2" stroke-dasharray="4,2"/>`,
+			cx, cy, borderSvgR)
+		fmt.Fprintf(&sb, "\n")
+	}
+
 	holeColor := map[HoleType]string{
 		HoleTrack:   "#4A4A4A",
 		HoleBase:    "#2196F3",
@@ -250,7 +286,6 @@ func GenerateSVG(board *Board) string {
 		HoleCenter:  "#FF9800",
 		HoleStart:   "#F44336",
 	}
-
 	playerColor := []string{"#E53935", "#1E88E5", "#43A047", "#FDD835", "#AB47BC", "#FF7043"}
 
 	for _, hole := range board.Holes {
@@ -268,7 +303,6 @@ func GenerateSVG(board *Board) string {
 		fmt.Fprintf(&sb, "\n")
 	}
 
-	// Text items
 	for _, text := range board.TextItems {
 		sx := toSvgX(text.X)
 		sy := toSvgY(text.Y)
@@ -282,17 +316,11 @@ func GenerateSVG(board *Board) string {
 		fmt.Fprintf(&sb, "\n")
 	}
 
-	// Legend
 	legendX := 10.0
 	legendY := svgH - 100
-	legends := []struct {
-		color, label string
-	}{
-		{"#4A4A4A", "Track"},
-		{"#F44336", "Start"},
-		{"#4CAF50", "Home Row"},
-		{"#FF9800", "Center"},
-		{"#2196F3", "Base"},
+	legends := []struct{ color, label string }{
+		{"#4A4A4A", "Track"}, {"#F44336", "Start"}, {"#4CAF50", "Home"},
+		{"#FF9800", "Center"}, {"#2196F3", "Base"},
 	}
 	for i, leg := range legends {
 		y := legendY + float64(i)*18

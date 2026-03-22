@@ -24,6 +24,9 @@ type Params struct {
 
 	SafeZ      float64
 	ClearanceZ float64
+
+	DrawBorder   bool // cut a decorative border circle with V-bit
+	CornerOrigin bool // origin at board corner (0,0) instead of center
 }
 
 func DefaultParams() Params {
@@ -52,6 +55,19 @@ func (p Params) GridSpacing() float64  { return 1.75 * p.MarbleDiameter }
 func (p Params) EdgeMargin() float64   { return 2.5 * p.MarbleDiameter }
 func (p Params) HoleDiameter() float64 { return p.MarbleDiameter }
 func (p Params) HoleDepth() float64    { return p.MarbleDiameter / 4.0 }
+
+// BorderRadius returns the radius of the decorative border circle (inches).
+// Positioned 1 marble diameter inside the board edge.
+func (p Params) BorderRadius() float64 {
+	return p.BoardDiameter/2 - p.MarbleDiameter
+}
+
+// BorderDepth returns the V-bit plunge depth to achieve a 1/8" wide cut.
+// For a V-bit with included angle A: depth = width / (2 * tan(A/2))
+func (p Params) BorderDepth() float64 {
+	halfAngle := p.VBitAngle / 2.0 * math.Pi / 180.0
+	return 0.125 / (2 * math.Tan(halfAngle))
+}
 
 // ConnectorCircleRadius returns the radius (in grid cells) of the circle
 // formed by the C (center connector) positions. Sized so the chord between
