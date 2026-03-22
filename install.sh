@@ -66,6 +66,9 @@ type GenerateRequest struct {
 	MarbleDiameter float64 `json:"marbleDiameter"`
 	NumPlayers     int     `json:"numPlayers"`
 	OutputFormat   string  `json:"outputFormat"`
+	DrawBorder     bool    `json:"drawBorder"`
+	CornerOrigin   bool    `json:"cornerOrigin"`
+	FontSize       float64 `json:"fontSize"`
 }
 
 func NewApp(staticDir string) http.Handler {
@@ -104,6 +107,11 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		}
 		if req.OutputFormat != "" {
 			outputFormat = req.OutputFormat
+		}
+		p.DrawBorder = req.DrawBorder
+		p.CornerOrigin = req.CornerOrigin
+		if req.FontSize > 0 {
+			p.TextHeight = req.FontSize
 		}
 	} else {
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
