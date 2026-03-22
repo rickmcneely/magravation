@@ -33,7 +33,7 @@ type Params struct {
 // DefaultParams returns sensible defaults for hardwood aggravation board.
 func DefaultParams() Params {
 	return Params{
-		BoardDiameter:  26.0,
+		BoardDiameter:  20.0,
 		MarbleDiameter: 0.625, // 5/8"
 		NumPlayers:     4,
 
@@ -73,15 +73,12 @@ func (p Params) HoleDepth() float64 {
 	return p.MarbleDiameter / 4.0
 }
 
-// MaxRadiusForPlayers returns the distance from board center to the farthest hole
-// for a given player count.
-func MaxRadiusForPlayers(numPlayers int, d float64) float64 {
-	if numPlayers == 4 {
-		// 4-player grid layout has diagonal corners at distance 7√2 from center
-		return 7.0 * math.Sqrt(2) * d
-	}
-	// Rotation-based layouts: farthest holes are base corners at (±2, 7)
-	return math.Sqrt(4+49) * d // sqrt(53) ≈ 7.28
+// MaxRadius returns the distance from board center to the farthest hole.
+// The farthest holes are base row corner positions at (±2, 7) in arm-local
+// grid coordinates = sqrt(4+49) ≈ 7.28 grid cells from center.
+// This is the same for all player counts.
+func (p Params) MaxRadius() float64 {
+	return math.Sqrt(4+49) * p.GridSpacing()
 }
 
 // MinBoardDiameterForPlayers returns the minimum board diameter for a given
@@ -89,7 +86,8 @@ func MaxRadiusForPlayers(numPlayers int, d float64) float64 {
 func MinBoardDiameterForPlayers(numPlayers int, marbleDiameter float64) float64 {
 	d := 1.75 * marbleDiameter
 	em := 2.5 * marbleDiameter
-	return 2 * (MaxRadiusForPlayers(numPlayers, d) + em)
+	maxR := math.Sqrt(4+49) * d // base row corners at sqrt(53) grid cells
+	return 2 * (maxR + em)
 }
 
 // MinBoardDiameter returns the minimum board diameter for this config.
@@ -111,8 +109,8 @@ func (p Params) Validate() error {
 
 	minDiam := p.MinBoardDiameter()
 	if p.BoardDiameter < minDiam-0.1 {
-		return fmt.Errorf("board diameter %.1f\" too small for %d players with %.3f\" marbles (need at least %.1f\")",
-			p.BoardDiameter, p.NumPlayers, p.MarbleDiameter, minDiam)
+		return fmt.Errorf("board diameter %.1f\" too small for %.3f\" marbles (need at least %.1f\")",
+			p.BoardDiameter, p.MarbleDiameter, minDiam)
 	}
 
 	return nil
