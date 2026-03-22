@@ -23,7 +23,7 @@ func main() {
 	marbleDiam := flag.Float64("marble-diameter", 0.625, "Marble diameter in inches (default 5/8\")")
 	numPlayers := flag.Int("players", 4, "Number of players (3-6)")
 
-	output := flag.String("output", "aggravation", "Output file prefix")
+	output := flag.String("output", "wahoo", "Output file prefix")
 	splitFiles := flag.Bool("split", false, "Generate separate files per tool")
 	previewOnly := flag.Bool("preview", false, "Generate SVG preview only")
 
@@ -49,7 +49,7 @@ func main() {
 		log.Fatalf("Error: %v", err)
 	}
 
-	fmt.Printf("Aggravation Board Generator\n")
+	fmt.Printf("Wahoo! Board Generator\n")
 	fmt.Printf("  Board diameter:   %.1f\" (round, min %.1f\")\n", p.BoardDiameter, p.MinBoardDiameter())
 	fmt.Printf("  Marble diameter:  %.3f\"\n", p.MarbleDiameter)
 	fmt.Printf("  Players:          %d\n", p.NumPlayers)
@@ -201,10 +201,10 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	switch outputFormat {
 	case "ballend":
 		content = gcode.BallEnd
-		filename = "aggravation_ballend.nc"
+		filename = "wahoo_ballend.nc"
 	case "vbit":
 		content = gcode.VBit
-		filename = "aggravation_vbit.nc"
+		filename = "wahoo_vbit.nc"
 	default:
 		content = gcode.Combined
 		filename = "aggravation.nc"

@@ -305,7 +305,7 @@ func (b *Board) addBoardText(d float64) {
 	n := b.Params.NumPlayers
 
 	b.TextItems = append(b.TextItems,
-		TextItem{X: 0, Y: r, Text: "AGGRAVATION", Height: b.Params.TextHeight, CenterOn: true},
+		TextItem{X: 0, Y: r, Text: "WAHOO!", Height: b.Params.TextHeight, CenterOn: true},
 		TextItem{X: 0, Y: -r, Text: fmt.Sprintf("%d PLAYER", n), Height: b.Params.TextHeight * 0.5, CenterOn: true},
 	)
 

@@ -146,9 +146,9 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	var content, filename string
 	switch outputFormat {
 	case "ballend":
-		content, filename = gcode.BallEnd, "aggravation_ballend.nc"
+		content, filename = gcode.BallEnd, "wahoo_ballend.nc"
 	case "vbit":
-		content, filename = gcode.VBit, "aggravation_vbit.nc"
+		content, filename = gcode.VBit, "wahoo_vbit.nc"
 	default:
 		content, filename = gcode.Combined, "aggravation.nc"
 	}
