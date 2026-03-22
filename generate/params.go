@@ -8,9 +8,8 @@ import (
 // Params holds all configuration for board generation.
 type Params struct {
 	BoardDiameter  float64 // diameter of round board (inches)
-	BoardThickness float64 // board thickness (inches) — for double-sided depth check
 	MarbleDiameter float64 // marble diameter (inches)
-	NumPlayers     int     // 4 or 6
+	NumPlayers     int     // 3 to 6
 
 	// Tool definitions
 	BallEndDiameter float64 // ball end mill diameter (inches)
@@ -35,7 +34,6 @@ type Params struct {
 func DefaultParams() Params {
 	return Params{
 		BoardDiameter:  26.0,
-		BoardThickness: 0.75,
 		MarbleDiameter: 0.625, // 5/8"
 		NumPlayers:     4,
 
@@ -55,13 +53,12 @@ func DefaultParams() Params {
 	}
 }
 
-// GridSpacing returns the distance between adjacent grid cells.
-// Each character cell in the board map is this far apart.
+// GridSpacing returns the distance between adjacent grid cells (1.75 * marble diameter).
 func (p Params) GridSpacing() float64 {
 	return 1.75 * p.MarbleDiameter
 }
 
-// EdgeMargin returns the distance from outermost marble center to board edge.
+// EdgeMargin returns the distance from outermost marble center to board edge (2.5 * marble diameter).
 func (p Params) EdgeMargin() float64 {
 	return 2.5 * p.MarbleDiameter
 }
@@ -71,21 +68,33 @@ func (p Params) HoleDiameter() float64 {
 	return p.MarbleDiameter
 }
 
-// HoleDepth returns the pocket depth = marbleRadius / 2.
+// HoleDepth returns the pocket depth (marbleRadius / 2 = marbleDiameter / 4).
 func (p Params) HoleDepth() float64 {
 	return p.MarbleDiameter / 4.0
 }
 
-// MaxRadius returns the distance from board center to the farthest hole.
-// For 4-player: corner diagonals at grid (0,0) = 7√2 cells from center.
-// For 6-player: similar extent.
-func (p Params) MaxRadius() float64 {
-	return 7.0 * math.Sqrt(2) * p.GridSpacing()
+// MaxRadiusForPlayers returns the distance from board center to the farthest hole
+// for a given player count.
+func MaxRadiusForPlayers(numPlayers int, d float64) float64 {
+	if numPlayers == 4 {
+		// 4-player grid layout has diagonal corners at distance 7√2 from center
+		return 7.0 * math.Sqrt(2) * d
+	}
+	// Rotation-based layouts: farthest holes are base corners at (±2, 7)
+	return math.Sqrt(4+49) * d // sqrt(53) ≈ 7.28
 }
 
-// MinBoardDiameter returns the minimum board diameter to fit all holes.
+// MinBoardDiameterForPlayers returns the minimum board diameter for a given
+// player count and marble diameter.
+func MinBoardDiameterForPlayers(numPlayers int, marbleDiameter float64) float64 {
+	d := 1.75 * marbleDiameter
+	em := 2.5 * marbleDiameter
+	return 2 * (MaxRadiusForPlayers(numPlayers, d) + em)
+}
+
+// MinBoardDiameter returns the minimum board diameter for this config.
 func (p Params) MinBoardDiameter() float64 {
-	return 2 * (p.MaxRadius() + p.EdgeMargin())
+	return MinBoardDiameterForPlayers(p.NumPlayers, p.MarbleDiameter)
 }
 
 // Validate checks that parameters are physically reasonable.
@@ -96,21 +105,14 @@ func (p Params) Validate() error {
 	if p.MarbleDiameter < 0.25 || p.MarbleDiameter > 2.0 {
 		return fmt.Errorf("marble diameter %.3f\" out of range (0.25-2.0\")", p.MarbleDiameter)
 	}
-	if p.NumPlayers != 4 && p.NumPlayers != 6 {
-		return fmt.Errorf("number of players must be 4 or 6, got %d", p.NumPlayers)
+	if p.NumPlayers < 3 || p.NumPlayers > 6 {
+		return fmt.Errorf("number of players must be 3 to 6, got %d", p.NumPlayers)
 	}
 
 	minDiam := p.MinBoardDiameter()
-	if p.BoardDiameter < minDiam {
-		return fmt.Errorf("board diameter %.1f\" too small for %.3f\" marbles (need at least %.1f\")",
-			p.BoardDiameter, p.MarbleDiameter, minDiam)
-	}
-
-	// Double-sided depth check
-	depth := p.HoleDepth()
-	if 2*depth > p.BoardThickness-0.0625 {
-		return fmt.Errorf("double-sided conflict: hole depth %.3f\" x 2 = %.3f\" exceeds board thickness %.3f\" minus 1/16\" floor",
-			depth, 2*depth, p.BoardThickness)
+	if p.BoardDiameter < minDiam-0.1 {
+		return fmt.Errorf("board diameter %.1f\" too small for %d players with %.3f\" marbles (need at least %.1f\")",
+			p.BoardDiameter, p.NumPlayers, p.MarbleDiameter, minDiam)
 	}
 
 	return nil

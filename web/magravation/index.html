@@ -12,10 +12,8 @@
         .subtitle { text-align: center; color: #888; margin-bottom: 24px; }
         .layout { display: grid; grid-template-columns: 350px 1fr; gap: 24px; }
         @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
-
         .panel { background: #16213e; border-radius: 12px; padding: 20px; border: 1px solid #0f3460; }
         .panel h2 { color: #e6b800; margin-bottom: 16px; font-size: 1.1em; border-bottom: 1px solid #0f3460; padding-bottom: 8px; }
-
         .form-group { margin-bottom: 14px; }
         .form-group label { display: block; font-size: 0.85em; color: #aaa; margin-bottom: 4px; }
         .form-group input, .form-group select {
@@ -25,31 +23,22 @@
         .form-group input:focus, .form-group select:focus { outline: none; border-color: #e6b800; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .hint { font-size: 0.75em; color: #666; margin-top: 2px; }
-
-        .btn {
-            display: inline-block; padding: 10px 20px; border: none; border-radius: 6px;
-            font-size: 0.95em; cursor: pointer; font-weight: 600; transition: all 0.2s;
-        }
+        .btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 6px; font-size: 0.95em; cursor: pointer; font-weight: 600; transition: all 0.2s; }
         .btn-primary { background: #e6b800; color: #1a1a2e; }
         .btn-primary:hover { background: #ffd000; }
         .btn-secondary { background: #0f3460; color: #e0e0e0; }
         .btn-secondary:hover { background: #1a4a8a; }
         .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-
         .preview-container { position: relative; min-height: 400px; display: flex; align-items: center; justify-content: center; }
         .preview-container svg { max-width: 100%; max-height: 600px; }
         .preview-placeholder { color: #444; font-size: 1.2em; }
-
         .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
         .stat { background: #0a0e27; padding: 8px 12px; border-radius: 6px; }
         .stat .label { font-size: 0.75em; color: #888; }
         .stat .value { font-size: 1.1em; color: #e6b800; font-weight: 600; }
-
         .tool-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #0a0e27; font-size: 0.85em; }
         .tool-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-        .note { background: #0a0e27; border-left: 3px solid #e6b800; padding: 10px 14px; margin-top: 12px; font-size: 0.85em; color: #aaa; border-radius: 0 6px 6px 0; }
-
+        .warning { background: #3d3000; border: 1px solid #e6b800; padding: 8px 12px; border-radius: 6px; margin-top: 8px; font-size: 0.85em; color: #e6b800; display: none; }
         #error { display: none; background: #5c1a1a; border: 1px solid #8b2020; padding: 10px; border-radius: 6px; margin-top: 12px; }
     </style>
 </head>
@@ -62,37 +51,51 @@
             <div>
                 <div class="panel">
                     <h2>Board Parameters</h2>
+
                     <div class="form-group">
-                        <label>Board Diameter (inches)</label>
-                        <input type="number" id="boardDiameter" value="24" step="0.5" min="10" max="48">
-                        <div class="hint">Round board diameter</div>
+                        <label>Marble Diameter (inches)</label>
+                        <input type="number" id="marbleDiameter" value="0.625" step="0.0625" min="0.25" max="2">
+                        <div class="hint">5/8" = 0.625, 3/4" = 0.75, 1" = 1.0</div>
                     </div>
+
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Board Thickness (in)</label>
-                            <input type="number" id="boardThickness" value="0.75" step="0.0625" min="0.5" max="2">
-                            <div class="hint">3/4" = 0.75</div>
+                            <label>Side A Players</label>
+                            <select id="sideAPlayers">
+                                <option value="3">3 Players</option>
+                                <option value="4" selected>4 Players</option>
+                                <option value="5">5 Players</option>
+                                <option value="6">6 Players</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>Marble Diameter (in)</label>
-                            <input type="number" id="marbleDiameter" value="0.625" step="0.0625" min="0.25" max="2">
-                            <div class="hint">5/8" = 0.625</div>
+                            <label>Side B Players</label>
+                            <select id="sideBPlayers">
+                                <option value="3">3 Players</option>
+                                <option value="4">4 Players</option>
+                                <option value="5">5 Players</option>
+                                <option value="6" selected>6 Players</option>
+                            </select>
                         </div>
                     </div>
+
                     <div class="form-group">
-                        <label>Side to Generate</label>
-                        <select id="numPlayers">
-                            <option value="4" selected>4 Players (Side A)</option>
-                            <option value="6">6 Players (Side B)</option>
+                        <label>Board Diameter (inches)</label>
+                        <input type="number" id="boardDiameter" value="25" step="0.5" min="10" max="48">
+                        <div class="hint" id="minDiamHint">Minimum: calculating...</div>
+                        <div class="warning" id="diamWarning">Board diameter is less than the calculated minimum!</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Preview Side</label>
+                        <select id="previewSide">
+                            <option value="A" selected>Side A</option>
+                            <option value="B">Side B</option>
                         </select>
                     </div>
 
                     <div class="btn-group">
                         <button class="btn btn-primary" onclick="updatePreview()">Update Preview</button>
-                    </div>
-
-                    <div class="note">
-                        Double-sided board: cut 4-player on one side, flip, and cut 6-player on the other. Origin is always board center.
                     </div>
 
                     <div id="error"></div>
@@ -118,7 +121,7 @@
                     <h2>CNC Tools</h2>
                     <div class="tool-item">
                         <div class="tool-dot" style="background: #e53935;"></div>
-                        <div><strong>T1:</strong> 1/4" Ball End Mill &mdash; Marble holes</div>
+                        <div><strong>T1:</strong> 1/4" Ball End Mill &mdash; Marble pockets</div>
                     </div>
                     <div class="tool-item">
                         <div class="tool-dot" style="background: #1e88e5;"></div>
@@ -128,10 +131,10 @@
 
                 <div class="panel" style="margin-top: 16px;">
                     <h2>Board Stats</h2>
-                    <div class="stats" id="stats">
+                    <div class="stats">
                         <div class="stat"><div class="label">Total Holes</div><div class="value" id="statHoles">--</div></div>
-                        <div class="stat"><div class="label">Hole Diameter</div><div class="value" id="statHoleDiam">--</div></div>
-                        <div class="stat"><div class="label">Hole Depth</div><div class="value" id="statHoleDepth">--</div></div>
+                        <div class="stat"><div class="label">Pocket Diameter</div><div class="value" id="statHoleDiam">--</div></div>
+                        <div class="stat"><div class="label">Pocket Depth</div><div class="value" id="statHoleDepth">--</div></div>
                         <div class="stat"><div class="label">Grid Spacing</div><div class="value" id="statSpacing">--</div></div>
                     </div>
                 </div>
@@ -147,129 +150,140 @@
     </div>
 
     <script>
+        let minDiamData = null;
+
+        function getSelectedPlayers() {
+            const side = document.getElementById('previewSide').value;
+            return parseInt(document.getElementById(side === 'A' ? 'sideAPlayers' : 'sideBPlayers').value);
+        }
+
         function getParams() {
             return {
                 boardDiameter: parseFloat(document.getElementById('boardDiameter').value),
-                boardThickness: parseFloat(document.getElementById('boardThickness').value),
                 marbleDiameter: parseFloat(document.getElementById('marbleDiameter').value),
-                numPlayers: parseInt(document.getElementById('numPlayers').value),
+                numPlayers: getSelectedPlayers(),
                 outputFormat: document.getElementById('outputFormat').value
             };
         }
 
         function showError(msg) {
             const el = document.getElementById('error');
-            if (msg) {
-                el.textContent = msg;
-                el.style.display = 'block';
-            } else {
-                el.style.display = 'none';
-            }
+            if (msg) { el.textContent = msg; el.style.display = 'block'; }
+            else { el.style.display = 'none'; }
+        }
+
+        async function calcMinDiameter() {
+            const md = parseFloat(document.getElementById('marbleDiameter').value);
+            const sA = parseInt(document.getElementById('sideAPlayers').value);
+            const sB = parseInt(document.getElementById('sideBPlayers').value);
+
+            try {
+                const resp = await fetch('api/mindiameter', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ marbleDiameter: md, sideAPlayers: sA, sideBPlayers: sB })
+                });
+                if (resp.ok) {
+                    minDiamData = await resp.json();
+                    document.getElementById('minDiamHint').textContent =
+                        `Minimum: ${minDiamData.minDiameter}" (Side A: ${minDiamData.minDiameterA}", Side B: ${minDiamData.minDiameterB}")`;
+
+                    const current = parseFloat(document.getElementById('boardDiameter').value);
+                    const warn = document.getElementById('diamWarning');
+                    if (current < minDiamData.minDiameter - 0.05) {
+                        warn.style.display = 'block';
+                    } else {
+                        warn.style.display = 'none';
+                    }
+
+                    // Auto-fill if current is less than min
+                    if (current < minDiamData.minDiameter - 0.05) {
+                        document.getElementById('boardDiameter').value = minDiamData.minDiameter;
+                        warn.style.display = 'none';
+                    }
+                }
+            } catch (err) { /* ignore */ }
+        }
+
+        function onParamChange() {
+            calcMinDiameter();
+        }
+
+        function checkDiameterWarning() {
+            if (!minDiamData) return;
+            const current = parseFloat(document.getElementById('boardDiameter').value);
+            const warn = document.getElementById('diamWarning');
+            warn.style.display = current < minDiamData.minDiameter - 0.05 ? 'block' : 'none';
         }
 
         async function updatePreview() {
             showError('');
             const params = getParams();
-
             try {
                 const resp = await fetch('api/preview', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(params)
                 });
-
-                if (!resp.ok) {
-                    const text = await resp.text();
-                    showError(text);
-                    return;
-                }
-
-                const svg = await resp.text();
-                document.getElementById('previewContainer').innerHTML = svg;
+                if (!resp.ok) { showError(await resp.text()); return; }
+                document.getElementById('previewContainer').innerHTML = await resp.text();
 
                 const md = params.marbleDiameter;
-                const clearance = 0.03125;
-                const wallMin = 0.1875;
-                const holeDiam = md + clearance;
-                const holeDepth = md * 0.50;
-                const spacing = holeDiam + wallMin;
-
-                document.getElementById('statHoleDiam').textContent = holeDiam.toFixed(4) + '"';
-                document.getElementById('statHoleDepth').textContent = holeDepth.toFixed(4) + '"';
-                document.getElementById('statSpacing').textContent = spacing.toFixed(4) + '"';
-
+                document.getElementById('statHoleDiam').textContent = md.toFixed(4) + '"';
+                document.getElementById('statHoleDepth').textContent = (md / 4).toFixed(4) + '"';
+                document.getElementById('statSpacing').textContent = (md * 1.75).toFixed(4) + '"';
                 const circles = document.getElementById('previewContainer').querySelectorAll('circle:not(:first-child)');
                 document.getElementById('statHoles').textContent = circles.length;
-
-            } catch (err) {
-                showError('Network error: ' + err.message);
-            }
+            } catch (err) { showError('Network error: ' + err.message); }
         }
 
         async function downloadGCode() {
             showError('');
             const params = getParams();
-
             try {
                 const resp = await fetch('api/generate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(params)
                 });
-
-                if (!resp.ok) {
-                    const text = await resp.text();
-                    showError(text);
-                    return;
-                }
-
+                if (!resp.ok) { showError(await resp.text()); return; }
                 const blob = await resp.blob();
-                const disposition = resp.headers.get('Content-Disposition') || '';
-                const match = disposition.match(/filename="(.+)"/);
-                const filename = match ? match[1] : 'aggravation.nc';
-
-                const url = URL.createObjectURL(blob);
+                const disp = resp.headers.get('Content-Disposition') || '';
+                const m = disp.match(/filename="(.+)"/);
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
+                a.href = URL.createObjectURL(blob);
+                a.download = m ? m[1] : 'aggravation.nc';
                 a.click();
-                URL.revokeObjectURL(url);
-            } catch (err) {
-                showError('Network error: ' + err.message);
-            }
+                URL.revokeObjectURL(a.href);
+            } catch (err) { showError('Network error: ' + err.message); }
         }
 
         async function downloadSVG() {
             showError('');
             const params = getParams();
-
             try {
                 const resp = await fetch('api/preview', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(params)
                 });
-
-                if (!resp.ok) {
-                    const text = await resp.text();
-                    showError(text);
-                    return;
-                }
-
+                if (!resp.ok) { showError(await resp.text()); return; }
                 const svg = await resp.text();
-                const blob = new Blob([svg], {type: 'image/svg+xml'});
-                const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
+                a.href = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
                 a.download = 'aggravation_preview.svg';
                 a.click();
-                URL.revokeObjectURL(url);
-            } catch (err) {
-                showError('Network error: ' + err.message);
-            }
+                URL.revokeObjectURL(a.href);
+            } catch (err) { showError('Network error: ' + err.message); }
         }
 
-        window.addEventListener('load', updatePreview);
+        // Wire up change events
+        document.getElementById('marbleDiameter').addEventListener('change', onParamChange);
+        document.getElementById('sideAPlayers').addEventListener('change', onParamChange);
+        document.getElementById('sideBPlayers').addEventListener('change', onParamChange);
+        document.getElementById('boardDiameter').addEventListener('change', checkDiameterWarning);
+
+        window.addEventListener('load', () => { calcMinDiameter(); updatePreview(); });
     </script>
 </body>
 </html>

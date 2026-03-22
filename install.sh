@@ -53,6 +53,7 @@ package magravation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -60,29 +61,25 @@ import (
 	"magravation/generate"
 )
 
-// GenerateRequest is the JSON body POSTed to /api/generate and /api/preview.
 type GenerateRequest struct {
 	BoardDiameter  float64 `json:"boardDiameter"`
-	BoardThickness float64 `json:"boardThickness"`
 	MarbleDiameter float64 `json:"marbleDiameter"`
 	NumPlayers     int     `json:"numPlayers"`
 	OutputFormat   string  `json:"outputFormat"`
 }
 
-// NewApp returns an http.Handler for the Magravation web app.
 func NewApp(staticDir string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/generate", handleGenerate)
 	mux.HandleFunc("/api/preview", handlePreview)
 	mux.HandleFunc("/api/defaults", handleDefaults)
+	mux.HandleFunc("/api/mindiameter", handleMinDiameter)
 	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
 	return mux
 }
 
-// NewAppDefault returns an http.Handler using the default static file location.
 func NewAppDefault() http.Handler {
-	staticDir := filepath.Join(".", "web", "magravation")
-	return NewApp(staticDir)
+	return NewApp(filepath.Join(".", "web", "magravation"))
 }
 
 func parseRequest(r *http.Request) (generate.Params, string, error) {
@@ -94,32 +91,21 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			return p, "", fmt.Errorf("invalid JSON: %w", err)
 		}
-		if req.BoardDiameter > 0 {
-			p.BoardDiameter = req.BoardDiameter
-		}
-		if req.BoardThickness > 0 {
-			p.BoardThickness = req.BoardThickness
-		}
 		if req.MarbleDiameter > 0 {
 			p.MarbleDiameter = req.MarbleDiameter
 		}
 		if req.NumPlayers > 0 {
 			p.NumPlayers = req.NumPlayers
 		}
+		if req.BoardDiameter > 0 {
+			p.BoardDiameter = req.BoardDiameter
+		} else {
+			p.BoardDiameter = math.Ceil(p.MinBoardDiameter())
+		}
 		if req.OutputFormat != "" {
 			outputFormat = req.OutputFormat
 		}
 	} else {
-		if v := r.URL.Query().Get("boardDiameter"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.BoardDiameter = f
-			}
-		}
-		if v := r.URL.Query().Get("boardThickness"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.BoardThickness = f
-			}
-		}
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
 				p.MarbleDiameter = f
@@ -129,6 +115,13 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 			if n, err := strconv.Atoi(v); err == nil {
 				p.NumPlayers = n
 			}
+		}
+		if v := r.URL.Query().Get("boardDiameter"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.BoardDiameter = f
+			}
+		} else {
+			p.BoardDiameter = math.Ceil(p.MinBoardDiameter())
 		}
 		if v := r.URL.Query().Get("outputFormat"); v != "" {
 			outputFormat = v
@@ -144,29 +137,21 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	board, err := generate.GenerateBoard(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	gcode := generate.GenerateGCode(board)
-
-	var content string
-	var filename string
+	var content, filename string
 	switch outputFormat {
 	case "ballend":
-		content = gcode.BallEnd
-		filename = "aggravation_ballend.nc"
+		content, filename = gcode.BallEnd, "aggravation_ballend.nc"
 	case "vbit":
-		content = gcode.VBit
-		filename = "aggravation_vbit.nc"
+		content, filename = gcode.VBit, "aggravation_vbit.nc"
 	default:
-		content = gcode.Combined
-		filename = "aggravation.nc"
+		content, filename = gcode.Combined, "aggravation.nc"
 	}
-
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	fmt.Fprint(w, content)
@@ -178,30 +163,48 @@ func handlePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	board, err := generate.GenerateBoard(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	svg := generate.GenerateSVG(board)
-
 	w.Header().Set("Content-Type", "image/svg+xml")
-	fmt.Fprint(w, svg)
+	fmt.Fprint(w, generate.GenerateSVG(board))
 }
 
 func handleDefaults(w http.ResponseWriter, r *http.Request) {
 	p := generate.DefaultParams()
-	resp := GenerateRequest{
-		BoardDiameter:  p.BoardDiameter,
-		BoardThickness: p.BoardThickness,
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(GenerateRequest{
+		BoardDiameter:  math.Ceil(p.MinBoardDiameter()),
 		MarbleDiameter: p.MarbleDiameter,
 		NumPlayers:     p.NumPlayers,
 		OutputFormat:   "combined",
+	})
+}
+
+type minDiamReq struct {
+	MarbleDiameter float64 `json:"marbleDiameter"`
+	SideAPlayers   int     `json:"sideAPlayers"`
+	SideBPlayers   int     `json:"sideBPlayers"`
+}
+
+func handleMinDiameter(w http.ResponseWriter, r *http.Request) {
+	var req minDiamReq
+	if r.Method == http.MethodPost {
+		json.NewDecoder(r.Body).Decode(&req)
 	}
+	if req.MarbleDiameter <= 0 { req.MarbleDiameter = 0.625 }
+	if req.SideAPlayers < 3 { req.SideAPlayers = 4 }
+	if req.SideBPlayers < 3 { req.SideBPlayers = 6 }
+	minA := generate.MinBoardDiameterForPlayers(req.SideAPlayers, req.MarbleDiameter)
+	minB := generate.MinBoardDiameterForPlayers(req.SideBPlayers, req.MarbleDiameter)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]float64{
+		"minDiameterA": math.Ceil(minA*10) / 10,
+		"minDiameterB": math.Ceil(minB*10) / 10,
+		"minDiameter":  math.Ceil(math.Max(minA, minB)*10) / 10,
+	})
 }
 GOEOF
 echo "    Created handler.go"

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,17 +16,13 @@ import (
 )
 
 func main() {
-	// Mode flags
 	webMode := flag.Bool("web", false, "Run as web server")
 	webPort := flag.String("port", "8080", "Web server port")
 
-	// Board parameters
-	boardDiam := flag.Float64("board-diameter", 26.0, "Board diameter in inches (round board)")
-	boardThick := flag.Float64("board-thickness", 0.75, "Board thickness in inches")
+	boardDiam := flag.Float64("board-diameter", 0, "Board diameter in inches (0 = auto-calculate minimum)")
 	marbleDiam := flag.Float64("marble-diameter", 0.625, "Marble diameter in inches (default 5/8\")")
-	numPlayers := flag.Int("players", 4, "Number of players (4 or 6)")
+	numPlayers := flag.Int("players", 4, "Number of players (3-6)")
 
-	// Output options
 	output := flag.String("output", "aggravation", "Output file prefix")
 	splitFiles := flag.Bool("split", false, "Generate separate files per tool")
 	previewOnly := flag.Bool("preview", false, "Generate SVG preview only")
@@ -37,12 +34,15 @@ func main() {
 		return
 	}
 
-	// CLI mode
 	p := generate.DefaultParams()
-	p.BoardDiameter = *boardDiam
-	p.BoardThickness = *boardThick
 	p.MarbleDiameter = *marbleDiam
 	p.NumPlayers = *numPlayers
+
+	if *boardDiam > 0 {
+		p.BoardDiameter = *boardDiam
+	} else {
+		p.BoardDiameter = math.Ceil(p.MinBoardDiameter())
+	}
 
 	board, err := generate.GenerateBoard(p)
 	if err != nil {
@@ -50,8 +50,7 @@ func main() {
 	}
 
 	fmt.Printf("Aggravation Board Generator\n")
-	fmt.Printf("  Board diameter:   %.1f\" (round)\n", p.BoardDiameter)
-	fmt.Printf("  Board thickness:  %.3f\"\n", p.BoardThickness)
+	fmt.Printf("  Board diameter:   %.1f\" (round, min %.1f\")\n", p.BoardDiameter, p.MinBoardDiameter())
 	fmt.Printf("  Marble diameter:  %.3f\"\n", p.MarbleDiameter)
 	fmt.Printf("  Players:          %d\n", p.NumPlayers)
 	fmt.Printf("  Total holes:      %d\n", len(board.Holes))
@@ -96,7 +95,6 @@ func main() {
 		fmt.Printf("Written: %s (%d lines)\n", fname, lines)
 	}
 
-	// Also generate SVG preview
 	svg := generate.GenerateSVG(board)
 	svgFile := *output + ".svg"
 	if err := os.WriteFile(svgFile, []byte(svg), 0644); err != nil {
@@ -121,16 +119,14 @@ func runWeb(port string) {
 	mux.HandleFunc("/api/generate", handleGenerate)
 	mux.HandleFunc("/api/preview", handlePreview)
 	mux.HandleFunc("/api/defaults", handleDefaults)
+	mux.HandleFunc("/api/mindiameter", handleMinDiameter)
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
 
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
-// --- Web handlers ---
-
 type generateRequest struct {
 	BoardDiameter  float64 `json:"boardDiameter"`
-	BoardThickness float64 `json:"boardThickness"`
 	MarbleDiameter float64 `json:"marbleDiameter"`
 	NumPlayers     int     `json:"numPlayers"`
 	OutputFormat   string  `json:"outputFormat"`
@@ -145,32 +141,21 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			return p, "", fmt.Errorf("invalid JSON: %w", err)
 		}
-		if req.BoardDiameter > 0 {
-			p.BoardDiameter = req.BoardDiameter
-		}
-		if req.BoardThickness > 0 {
-			p.BoardThickness = req.BoardThickness
-		}
 		if req.MarbleDiameter > 0 {
 			p.MarbleDiameter = req.MarbleDiameter
 		}
 		if req.NumPlayers > 0 {
 			p.NumPlayers = req.NumPlayers
 		}
+		if req.BoardDiameter > 0 {
+			p.BoardDiameter = req.BoardDiameter
+		} else {
+			p.BoardDiameter = math.Ceil(p.MinBoardDiameter())
+		}
 		if req.OutputFormat != "" {
 			outputFormat = req.OutputFormat
 		}
 	} else {
-		if v := r.URL.Query().Get("boardDiameter"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.BoardDiameter = f
-			}
-		}
-		if v := r.URL.Query().Get("boardThickness"); v != "" {
-			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				p.BoardThickness = f
-			}
-		}
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
 				p.MarbleDiameter = f
@@ -180,6 +165,13 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 			if n, err := strconv.Atoi(v); err == nil {
 				p.NumPlayers = n
 			}
+		}
+		if v := r.URL.Query().Get("boardDiameter"); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				p.BoardDiameter = f
+			}
+		} else {
+			p.BoardDiameter = math.Ceil(p.MinBoardDiameter())
 		}
 		if v := r.URL.Query().Get("outputFormat"); v != "" {
 			outputFormat = v
@@ -237,7 +229,6 @@ func handlePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svg := generate.GenerateSVG(board)
-
 	w.Header().Set("Content-Type", "image/svg+xml")
 	fmt.Fprint(w, svg)
 }
@@ -245,12 +236,63 @@ func handlePreview(w http.ResponseWriter, r *http.Request) {
 func handleDefaults(w http.ResponseWriter, r *http.Request) {
 	p := generate.DefaultParams()
 	resp := generateRequest{
-		BoardDiameter:  p.BoardDiameter,
-		BoardThickness: p.BoardThickness,
+		BoardDiameter:  math.Ceil(p.MinBoardDiameter()),
 		MarbleDiameter: p.MarbleDiameter,
 		NumPlayers:     p.NumPlayers,
 		OutputFormat:   "combined",
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+type minDiameterRequest struct {
+	MarbleDiameter float64 `json:"marbleDiameter"`
+	SideAPlayers   int     `json:"sideAPlayers"`
+	SideBPlayers   int     `json:"sideBPlayers"`
+}
+
+type minDiameterResponse struct {
+	MinDiameterA float64 `json:"minDiameterA"`
+	MinDiameterB float64 `json:"minDiameterB"`
+	MinDiameter  float64 `json:"minDiameter"`
+}
+
+func handleMinDiameter(w http.ResponseWriter, r *http.Request) {
+	var req minDiameterRequest
+	if r.Method == http.MethodPost {
+		json.NewDecoder(r.Body).Decode(&req)
+	} else {
+		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
+			req.MarbleDiameter, _ = strconv.ParseFloat(v, 64)
+		}
+		if v := r.URL.Query().Get("sideAPlayers"); v != "" {
+			req.SideAPlayers, _ = strconv.Atoi(v)
+		}
+		if v := r.URL.Query().Get("sideBPlayers"); v != "" {
+			req.SideBPlayers, _ = strconv.Atoi(v)
+		}
+	}
+
+	if req.MarbleDiameter <= 0 {
+		req.MarbleDiameter = 0.625
+	}
+	if req.SideAPlayers < 3 {
+		req.SideAPlayers = 4
+	}
+	if req.SideBPlayers < 3 {
+		req.SideBPlayers = 6
+	}
+
+	minA := generate.MinBoardDiameterForPlayers(req.SideAPlayers, req.MarbleDiameter)
+	minB := generate.MinBoardDiameterForPlayers(req.SideBPlayers, req.MarbleDiameter)
+	minBoth := math.Max(minA, minB)
+
+	resp := minDiameterResponse{
+		MinDiameterA: math.Ceil(minA*10) / 10,
+		MinDiameterB: math.Ceil(minB*10) / 10,
+		MinDiameter:  math.Ceil(minBoth*10) / 10,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
