@@ -20,7 +20,7 @@ func main() {
 	webPort := flag.String("port", "8080", "Web server port")
 
 	// Board parameters
-	boardDiam := flag.Float64("board-diameter", 24.0, "Board diameter in inches (round board)")
+	boardDiam := flag.Float64("board-diameter", 26.0, "Board diameter in inches (round board)")
 	boardThick := flag.Float64("board-thickness", 0.75, "Board thickness in inches")
 	marbleDiam := flag.Float64("marble-diameter", 0.625, "Marble diameter in inches (default 5/8\")")
 	numPlayers := flag.Int("players", 4, "Number of players (4 or 6)")
