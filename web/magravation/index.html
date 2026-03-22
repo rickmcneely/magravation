@@ -86,6 +86,8 @@
                                 <option value="4">4 Players</option>
                                 <option value="5">5 Players</option>
                                 <option value="6" selected>6 Players</option>
+                                <option value="7">7 Players</option>
+                                <option value="8">8 Players</option>
                             </select>
                         </div>
                     </div>
@@ -160,6 +162,7 @@
                         <div class="stat"><div class="label">Pocket Diameter</div><div class="value" id="statHoleDiam">--</div></div>
                         <div class="stat"><div class="label">Pocket Depth</div><div class="value" id="statHoleDepth">--</div></div>
                         <div class="stat"><div class="label">Grid Spacing</div><div class="value" id="statSpacing">--</div></div>
+                        <div class="stat" style="grid-column: 1 / -1"><div class="label">Suggested Ball End Mill</div><div class="value" id="statBitSize">--</div></div>
                     </div>
                 </div>
             </div>
@@ -259,6 +262,35 @@
             warn.style.display = current < minDiamData.minDiameter - 0.05 ? 'block' : 'none';
         }
 
+        // Suggest the nearest common ball end mill size >= marble diameter.
+        function suggestBitSize(marbleDiam) {
+            // Common imperial sizes in inches
+            const imperial = [
+                [1/8, '1/8"'], [3/16, '3/16"'], [1/4, '1/4"'], [5/16, '5/16"'],
+                [3/8, '3/8"'], [7/16, '7/16"'], [1/2, '1/2"'], [9/16, '9/16"'],
+                [5/8, '5/8"'], [11/16, '11/16"'], [3/4, '3/4"'], [7/8, '7/8"'], [1, '1"']
+            ];
+            // Common metric sizes in inches (converted)
+            const metric = [
+                [3/25.4, '3mm'], [4/25.4, '4mm'], [5/25.4, '5mm'], [6/25.4, '6mm'],
+                [8/25.4, '8mm'], [10/25.4, '10mm'], [12/25.4, '12mm'], [14/25.4, '14mm'],
+                [16/25.4, '16mm'], [18/25.4, '18mm'], [20/25.4, '20mm'], [25/25.4, '25mm']
+            ];
+            const all = imperial.concat(metric).sort((a, b) => a[0] - b[0]);
+            let best = null;
+            let bestDiff = Infinity;
+            for (const [size, label] of all) {
+                if (size >= marbleDiam - 0.001) {
+                    const diff = size - marbleDiam;
+                    if (diff < bestDiff) {
+                        bestDiff = diff;
+                        best = label;
+                    }
+                }
+            }
+            return best || all[all.length - 1][1];
+        }
+
         async function updatePreview() {
             showError('');
             const params = getParams();
@@ -275,6 +307,7 @@
                 document.getElementById('statHoleDiam').textContent = md.toFixed(4) + '"';
                 document.getElementById('statHoleDepth').textContent = (md / 4).toFixed(4) + '"';
                 document.getElementById('statSpacing').textContent = (md * 1.75).toFixed(4) + '"';
+                document.getElementById('statBitSize').textContent = suggestBitSize(md) + ' ball end';
                 const circles = document.getElementById('previewContainer').querySelectorAll('circle:not(:first-child)');
                 document.getElementById('statHoles').textContent = circles.length;
             } catch (err) { showError('Network error: ' + err.message); }
