@@ -325,9 +325,9 @@ func (b *Board) addBoardText(d float64) {
 		tx := textR * math.Cos(rad)
 		ty := textR * math.Sin(rad)
 		// Text baseline parallel to the c-c line (perpendicular to arm).
-		// armAngle - 90 aligns text along the c-c direction, readable
-		// right-side-up from the player's seated position looking down.
-		textAngle := angle - 90
+		// armAngle + 90 aligns text along the c-c direction with bottom
+		// toward the m position (player side).
+		textAngle := angle + 90
 		b.TextItems = append(b.TextItems, TextItem{
 			X: tx, Y: ty, Text: "Wahoo!",
 			Height:   textHeight,
