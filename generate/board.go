@@ -87,18 +87,20 @@ func (b *Board) addHole(x, y float64, htype HoleType, player int) {
 
 // startPositions returns 4 radial start positions for a player.
 // Along the bisector angle between this arm and the CCW neighbor.
-// Outermost ($) at same radius as i (baseY * d from center).
-// Each subsequent marble is 1.4 * marbleDiameter closer to center.
+// Outermost ($) at same radius as position "2" (base row corner
+// at sqrt(4 + baseY²) * d from center). Each subsequent marble
+// is 1.5 * marbleDiameter closer to center.
 func startPositions(armAngle float64, numPlayers int, d, marbleDiam float64) [4][2]float64 {
 	bisector := armAngle + 180.0/float64(numPlayers)
 	rad := bisector * math.Pi / 180
 	dx, dy := math.Cos(rad), math.Sin(rad)
 	baseY := StationBaseY(numPlayers)
-	startSpacing := 1.4 * marbleDiam
+	dollarR := math.Sqrt(4+baseY*baseY) * d // same distance as base row corner
+	startSpacing := 1.5 * marbleDiam
 
 	var pos [4][2]float64
 	for i := 0; i < 4; i++ {
-		r := baseY*d - float64(i)*startSpacing
+		r := dollarR - float64(i)*startSpacing
 		pos[i] = [2]float64{r * dx, r * dy}
 	}
 	return pos

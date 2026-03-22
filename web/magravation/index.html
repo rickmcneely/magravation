@@ -103,10 +103,6 @@
                         </select>
                     </div>
 
-                    <div class="btn-group">
-                        <button class="btn btn-primary" onclick="updatePreview()">Update Preview</button>
-                    </div>
-
                     <div id="error"></div>
                 </div>
 
@@ -227,6 +223,7 @@
 
         function onParamChange() {
             calcMinDiameter();
+            updatePreview();
         }
 
         function onDiameterManualChange() {
@@ -305,7 +302,8 @@
         document.getElementById('marbleDiameter').addEventListener('input', onParamChange);
         document.getElementById('sideAPlayers').addEventListener('change', onParamChange);
         document.getElementById('sideBPlayers').addEventListener('change', onParamChange);
-        document.getElementById('boardDiameter').addEventListener('change', onDiameterManualChange);
+        document.getElementById('previewSide').addEventListener('change', function() { updatePreview(); });
+        document.getElementById('boardDiameter').addEventListener('change', function() { checkDiameterWarning(); updatePreview(); });
         document.getElementById('boardDiameter').addEventListener('input', onDiameterManualChange);
 
         window.addEventListener('load', () => {
