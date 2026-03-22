@@ -1,5 +1,7 @@
 package generate
 
+import "math"
+
 // Stroke font for CNC text engraving.
 // Each glyph is defined as a series of strokes (polylines).
 // Coordinates are normalized: width varies per character, height is 1.0.
@@ -165,8 +167,9 @@ func init() {
 
 // TextToStrokes converts a string to physical stroke paths.
 // Returns a slice of polylines (each polyline is []point in physical coords).
-// originX, originY is the bottom-left of the text baseline.
-func TextToStrokes(text string, originX, originY, height float64, centerOn bool) [][]point {
+// originX, originY is the text anchor point. angleDeg rotates the text
+// around the anchor. If centerOn, the text is centered on the anchor.
+func TextToStrokes(text string, originX, originY, height, angleDeg float64, centerOn bool) [][]point {
 	spacing := 0.15 // inter-character gap (normalized)
 
 	// Calculate total width for centering
@@ -178,16 +181,21 @@ func TextToStrokes(text string, originX, originY, height float64, centerOn bool)
 		}
 		totalWidth += g.Width + spacing
 	}
-	totalWidth -= spacing // no trailing gap
+	totalWidth -= spacing
 	totalWidth *= height
 
-	startX := originX
+	// Build strokes in local coordinates (text along +X from origin)
+	localStartX := 0.0
 	if centerOn {
-		startX = originX - totalWidth/2
+		localStartX = -totalWidth / 2
 	}
 
 	var result [][]point
-	curX := startX
+	curX := localStartX
+
+	angleRad := angleDeg * math.Pi / 180.0
+	cosA := math.Cos(angleRad)
+	sinA := math.Sin(angleRad)
 
 	for _, ch := range text {
 		g, ok := strokeFont[ch]
@@ -198,9 +206,13 @@ func TextToStrokes(text string, originX, originY, height float64, centerOn bool)
 		for _, stroke := range g.Strokes {
 			physical := make([]point, len(stroke))
 			for i, p := range stroke {
+				// Local position relative to anchor
+				lx := curX + p.X*height
+				ly := p.Y * height
+				// Rotate around anchor, then translate
 				physical[i] = point{
-					X: curX + p.X*height,
-					Y: originY + p.Y*height,
+					X: originX + lx*cosA - ly*sinA,
+					Y: originY + lx*sinA + ly*cosA,
 				}
 			}
 			result = append(result, physical)
@@ -211,3 +223,4 @@ func TextToStrokes(text string, originX, originY, height float64, centerOn bool)
 
 	return result
 }
+

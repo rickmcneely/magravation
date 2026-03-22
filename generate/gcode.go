@@ -131,7 +131,7 @@ func GenerateGCode(board *Board) *GCodeOutput {
 	}
 
 	for _, text := range board.TextItems {
-		strokes := TextToStrokes(text.Text, text.X, text.Y, text.Height, text.CenterOn)
+		strokes := TextToStrokes(text.Text, text.X, text.Y, text.Height, text.Angle, text.CenterOn)
 		comment := fmt.Sprintf("Text: \"%s\"", text.Text)
 
 		for _, w := range []*strings.Builder{&combined, &vbit} {

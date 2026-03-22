@@ -1,9 +1,6 @@
 package generate
 
-import (
-	"fmt"
-	"math"
-)
+import "math"
 
 type HoleType int
 
@@ -303,39 +300,34 @@ func (b *Board) generateNPlayer() {
 }
 
 func (b *Board) addBoardText(d float64) {
-	r := b.Params.BoardDiameter/2 - b.Params.EdgeMargin()*0.6
 	n := b.Params.NumPlayers
 
-	b.TextItems = append(b.TextItems,
-		TextItem{X: 0, Y: r, Text: "WAHOO!", Height: b.Params.TextHeight, CenterOn: true},
-		TextItem{X: 0, Y: -r, Text: fmt.Sprintf("%d PLAYER", n), Height: b.Params.TextHeight * 0.5, CenterOn: true},
-	)
+	// "Wahoo!" between m and 0 on each player station, at the C radius.
+	// Text is centered on the arm direction at the connector circle distance,
+	// rotated so it reads from the player's perspective (facing inward).
+	cLocalY := 2.0 / math.Tan(math.Pi/float64(n)) // C position y in arm-local grid cells
+	textR := cLocalY * d                            // physical distance from center
 
 	armAngles := make([]float64, n)
 	for i := 0; i < n; i++ {
 		armAngles[i] = 90.0 - float64(i)*360.0/float64(n)
 	}
 
-	if n == 4 {
-		labels := [][2]int{{7, -1}, {16, 7}, {7, 16}, {-2, 7}}
-		for i, lbl := range labels {
-			lx, ly := gridToPhys(lbl[0], lbl[1], d)
-			b.TextItems = append(b.TextItems, TextItem{
-				X: lx, Y: ly, Text: fmt.Sprintf("P%d", i+1),
-				Height: b.Params.TextHeight * 0.4, CenterOn: true,
-			})
-		}
-	} else {
-		baseY := StationBaseY(n)
-		for i, angle := range armAngles {
-			rad := angle * math.Pi / 180
-			r := (baseY + 1) * d
-			b.TextItems = append(b.TextItems, TextItem{
-				X: r * math.Cos(rad), Y: r * math.Sin(rad),
-				Text: fmt.Sprintf("P%d", i+1),
-				Height: b.Params.TextHeight * 0.35, CenterOn: true,
-			})
-		}
+	for _, angle := range armAngles {
+		rad := angle * math.Pi / 180
+		tx := textR * math.Cos(rad)
+		ty := textR * math.Sin(rad)
+		// Rotation: text baseline perpendicular to arm direction,
+		// readable from the player's side (facing toward center).
+		// The arm points at 'angle' degrees. Text should read left-to-right
+		// when viewed from the player's position (outside looking in).
+		textAngle := angle - 90 // rotate so text is perpendicular to arm
+		b.TextItems = append(b.TextItems, TextItem{
+			X: tx, Y: ty, Text: "Wahoo!",
+			Height:   b.Params.TextHeight * 0.4,
+			Angle:    textAngle,
+			CenterOn: true,
+		})
 	}
 }
 
