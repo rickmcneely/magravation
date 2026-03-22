@@ -279,12 +279,12 @@ func handleMinDiameter(w http.ResponseWriter, r *http.Request) {
 	if req.SideAPlayers < 3 {
 		req.SideAPlayers = 4
 	}
-	if req.SideBPlayers < 3 {
-		req.SideBPlayers = 6
-	}
-
+	// SideBPlayers = 0 means single-sided
 	minA := generate.MinBoardDiameterForPlayers(req.SideAPlayers, req.MarbleDiameter)
-	minB := generate.MinBoardDiameterForPlayers(req.SideBPlayers, req.MarbleDiameter)
+	minB := 0.0
+	if req.SideBPlayers >= 3 {
+		minB = generate.MinBoardDiameterForPlayers(req.SideBPlayers, req.MarbleDiameter)
+	}
 	minBoth := math.Max(minA, minB)
 
 	resp := minDiameterResponse{

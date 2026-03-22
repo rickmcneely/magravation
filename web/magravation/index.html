@@ -45,7 +45,7 @@
 <body>
     <div class="container">
         <h1>Magravation</h1>
-        <p class="subtitle">Aggravation Board Game GCode Generator for MASSO G3 CNC - Double-Sided Round Board</p>
+        <p class="subtitle">Aggravation Board Game GCode Generator for MASSO G3 CNC</p>
 
         <div class="layout">
             <div>
@@ -58,6 +58,14 @@
                         <div class="hint">5/8" = 0.625, 3/4" = 0.75, 1" = 1.0</div>
                     </div>
 
+                    <div class="form-group">
+                        <label>Board Type</label>
+                        <select id="boardType" onchange="onBoardTypeChange()">
+                            <option value="double" selected>Double-sided</option>
+                            <option value="single">Single-sided</option>
+                        </select>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Side A Players</label>
@@ -68,7 +76,7 @@
                                 <option value="6">6 Players</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="sideBGroup">
                             <label>Side B Players</label>
                             <select id="sideBPlayers">
                                 <option value="3">3 Players</option>
@@ -86,7 +94,7 @@
                         <div class="warning" id="diamWarning">Board diameter is less than the calculated minimum!</div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" id="previewSideGroup">
                         <label>Preview Side</label>
                         <select id="previewSide">
                             <option value="A" selected>Side A</option>
@@ -152,6 +160,18 @@
     <script>
         let minDiamData = null;
 
+        function isSingleSided() {
+            return document.getElementById('boardType').value === 'single';
+        }
+
+        function onBoardTypeChange() {
+            const single = isSingleSided();
+            document.getElementById('sideBGroup').style.display = single ? 'none' : '';
+            document.getElementById('previewSideGroup').style.display = single ? 'none' : '';
+            if (single) document.getElementById('previewSide').value = 'A';
+            onParamChange();
+        }
+
         function getSelectedPlayers() {
             const side = document.getElementById('previewSide').value;
             return parseInt(document.getElementById(side === 'A' ? 'sideAPlayers' : 'sideBPlayers').value);
@@ -175,7 +195,8 @@
         async function calcMinDiameter() {
             const md = parseFloat(document.getElementById('marbleDiameter').value);
             const sA = parseInt(document.getElementById('sideAPlayers').value);
-            const sB = parseInt(document.getElementById('sideBPlayers').value);
+            const single = isSingleSided();
+            const sB = single ? 0 : parseInt(document.getElementById('sideBPlayers').value);
 
             try {
                 const resp = await fetch('api/mindiameter', {
@@ -185,22 +206,19 @@
                 });
                 if (resp.ok) {
                     minDiamData = await resp.json();
-                    document.getElementById('minDiamHint').textContent =
-                        `Minimum: ${minDiamData.minDiameter}" (Side A: ${minDiamData.minDiameterA}", Side B: ${minDiamData.minDiameterB}")`;
+                    if (single) {
+                        document.getElementById('minDiamHint').textContent =
+                            `Minimum: ${minDiamData.minDiameter}"`;
+                    } else {
+                        document.getElementById('minDiamHint').textContent =
+                            `Minimum: ${minDiamData.minDiameter}" (Side A: ${minDiamData.minDiameterA}", Side B: ${minDiamData.minDiameterB}")`;
+                    }
 
                     const current = parseFloat(document.getElementById('boardDiameter').value);
-                    const warn = document.getElementById('diamWarning');
-                    if (current < minDiamData.minDiameter - 0.05) {
-                        warn.style.display = 'block';
-                    } else {
-                        warn.style.display = 'none';
-                    }
-
-                    // Auto-fill if current is less than min
                     if (current < minDiamData.minDiameter - 0.05) {
                         document.getElementById('boardDiameter').value = minDiamData.minDiameter;
-                        warn.style.display = 'none';
                     }
+                    checkDiameterWarning();
                 }
             } catch (err) { /* ignore */ }
         }

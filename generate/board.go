@@ -86,17 +86,19 @@ func (b *Board) addHole(x, y float64, htype HoleType, player int) {
 }
 
 // startPositions returns 4 radial start positions for a player.
-// Along the bisector angle between this arm and the CCW neighbor,
-// at distances baseY, baseY-1, baseY-2, baseY-3 grid cells from center.
-func startPositions(armAngle float64, numPlayers int, d float64) [4][2]float64 {
+// Along the bisector angle between this arm and the CCW neighbor.
+// Outermost ($) at same radius as i (baseY * d from center).
+// Each subsequent marble is 1.4 * marbleDiameter closer to center.
+func startPositions(armAngle float64, numPlayers int, d, marbleDiam float64) [4][2]float64 {
 	bisector := armAngle + 180.0/float64(numPlayers)
 	rad := bisector * math.Pi / 180
 	dx, dy := math.Cos(rad), math.Sin(rad)
 	baseY := StationBaseY(numPlayers)
+	startSpacing := 1.4 * marbleDiam
 
 	var pos [4][2]float64
 	for i := 0; i < 4; i++ {
-		r := (baseY - float64(i)) * d
+		r := baseY*d - float64(i)*startSpacing
 		pos[i] = [2]float64{r * dx, r * dy}
 	}
 	return pos
@@ -179,7 +181,7 @@ func (b *Board) generate4Player() {
 	// Radial start positions (4 per player)
 	armAngles := []float64{90, 0, -90, 180}
 	for player, armAngle := range armAngles {
-		for _, pos := range startPositions(armAngle, 4, d) {
+		for _, pos := range startPositions(armAngle, 4, d, b.Params.MarbleDiameter) {
 			b.addHole(pos[0], pos[1], HoleBase, player)
 		}
 	}
@@ -290,7 +292,7 @@ func (b *Board) generateNPlayer() {
 		}
 
 		// Radial start positions
-		for _, pos := range startPositions(armAngles[player], n, d) {
+		for _, pos := range startPositions(armAngles[player], n, d, b.Params.MarbleDiameter) {
 			b.addHole(pos[0], pos[1], HoleBase, player)
 		}
 	}
