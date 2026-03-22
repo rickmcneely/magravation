@@ -143,8 +143,10 @@
                         </select>
                     </div>
                     <div class="btn-group">
-                        <button class="btn btn-primary" onclick="downloadGCode()">Download .nc File</button>
+                        <button class="btn btn-primary" onclick="downloadGCode()">Download .nc</button>
+                        <button class="btn btn-secondary" onclick="copyGCode()">Copy .nc</button>
                         <button class="btn btn-secondary" onclick="downloadSVG()">Download SVG</button>
+                        <button class="btn btn-secondary" onclick="copySVG()">Copy SVG</button>
                     </div>
                 </div>
 
@@ -371,6 +373,45 @@
                 a.click();
                 URL.revokeObjectURL(a.href);
             } catch (err) { showError('Network error: ' + err.message); }
+        }
+
+        async function copyGCode() {
+            showError('');
+            const params = getParams();
+            try {
+                const resp = await fetch('api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(params)
+                });
+                if (!resp.ok) { showError(await resp.text()); return; }
+                const text = await resp.text();
+                await navigator.clipboard.writeText(text);
+                showError(''); // clear any previous error
+                const btn = event.target;
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = orig, 1500);
+            } catch (err) { showError('Copy failed: ' + err.message); }
+        }
+
+        async function copySVG() {
+            showError('');
+            const params = getParams();
+            try {
+                const resp = await fetch('api/preview', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(params)
+                });
+                if (!resp.ok) { showError(await resp.text()); return; }
+                const svg = await resp.text();
+                await navigator.clipboard.writeText(svg);
+                const btn = event.target;
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = orig, 1500);
+            } catch (err) { showError('Copy failed: ' + err.message); }
         }
 
         document.getElementById('marbleDiameter').addEventListener('change', onParamChange);
