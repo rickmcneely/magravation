@@ -193,33 +193,36 @@
             else { el.style.display = 'none'; }
         }
 
-        async function calcMinDiameter() {
+        // Compute minimum board diameter entirely client-side.
+        // Formula: 2 * (stationBaseY(n) * d + 2 * md * 1.5)
+        //   where d = 1.75 * md, stationBaseY(n) = 2/tan(pi/n) + 5
+        function minDiamForPlayers(n, md) {
+            const d = 1.75 * md;
+            const baseY = 2.0 / Math.tan(Math.PI / n) + 5.0;
+            return Math.ceil(2 * (baseY * d + 2 * md * 1.5) * 10) / 10;
+        }
+
+        function calcMinDiameter() {
             const md = parseFloat(document.getElementById('marbleDiameter').value);
             const sA = parseInt(document.getElementById('sideAPlayers').value);
             const single = isSingleSided();
             const sB = single ? 0 : parseInt(document.getElementById('sideBPlayers').value);
 
-            try {
-                const resp = await fetch('api/mindiameter', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ marbleDiameter: md, sideAPlayers: sA, sideBPlayers: sB })
-                });
-                if (resp.ok) {
-                    minDiamData = await resp.json();
-                    if (single) {
-                        document.getElementById('minDiamHint').textContent =
-                            `Minimum: ${minDiamData.minDiameter}"`;
-                    } else {
-                        document.getElementById('minDiamHint').textContent =
-                            `Minimum: ${minDiamData.minDiameter}" (A: ${minDiamData.minDiameterA}", B: ${minDiamData.minDiameterB}")`;
-                    }
+            const minA = minDiamForPlayers(sA, md);
+            const minB = sB >= 3 ? minDiamForPlayers(sB, md) : 0;
+            const minBoth = Math.max(minA, minB);
 
-                    // Always set diameter to minimum when params change
-                    document.getElementById('boardDiameter').value = minDiamData.minDiameter;
-                    checkDiameterWarning();
-                }
-            } catch (err) { /* ignore */ }
+            minDiamData = { minDiameterA: minA, minDiameterB: minB, minDiameter: minBoth };
+
+            if (single) {
+                document.getElementById('minDiamHint').textContent = `Minimum: ${minBoth}"`;
+            } else {
+                document.getElementById('minDiamHint').textContent =
+                    `Minimum: ${minBoth}" (A: ${minA}", B: ${minB}")`;
+            }
+
+            document.getElementById('boardDiameter').value = minBoth;
+            checkDiameterWarning();
         }
 
         function onParamChange() {
@@ -305,7 +308,10 @@
         document.getElementById('boardDiameter').addEventListener('change', onDiameterManualChange);
         document.getElementById('boardDiameter').addEventListener('input', onDiameterManualChange);
 
-        window.addEventListener('load', () => { calcMinDiameter(); updatePreview(); });
+        window.addEventListener('load', () => {
+            calcMinDiameter();
+            updatePreview();
+        });
     </script>
 </body>
 </html>
