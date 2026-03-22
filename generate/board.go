@@ -308,12 +308,14 @@ func (b *Board) addBoardText(d float64) {
 	cLocalY := 2.0 / math.Tan(math.Pi/float64(n))
 	textR := cLocalY * d // distance from center (same as C positions)
 
-	// Font height: sized so text width >= 50% of c-to-c distance (4d).
-	// TextWidth("Wahoo!", h) = sum_of_glyph_widths * h.
-	// Solve: TextWidth("Wahoo!", h) >= 0.5 * 4 * d → h = 2d / TextWidth("Wahoo!", 1)
-	minWidth := 0.5 * 4 * d
-	unitWidth := TextWidth("Wahoo!", 1.0) // width at height=1
-	textHeight := minWidth / unitWidth
+	// Font height: use user-specified TextHeight if > 0, otherwise
+	// auto-size so text width >= 50% of c-to-c distance (4d).
+	textHeight := b.Params.TextHeight
+	if textHeight <= 0 {
+		minWidth := 0.5 * 4 * d
+		unitWidth := TextWidth("Wahoo!", 1.0)
+		textHeight = minWidth / unitWidth
+	}
 
 	armAngles := make([]float64, n)
 	for i := 0; i < n; i++ {

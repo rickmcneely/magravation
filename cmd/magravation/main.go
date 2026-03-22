@@ -137,6 +137,7 @@ type generateRequest struct {
 	OutputFormat   string  `json:"outputFormat"`
 	DrawBorder     bool    `json:"drawBorder"`
 	CornerOrigin   bool    `json:"cornerOrigin"`
+	FontSize       float64 `json:"fontSize"`
 }
 
 func parseRequest(r *http.Request) (generate.Params, string, error) {
@@ -164,6 +165,9 @@ func parseRequest(r *http.Request) (generate.Params, string, error) {
 		}
 		p.DrawBorder = req.DrawBorder
 		p.CornerOrigin = req.CornerOrigin
+		if req.FontSize > 0 {
+			p.TextHeight = req.FontSize
+		}
 	} else {
 		if v := r.URL.Query().Get("marbleDiameter"); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {

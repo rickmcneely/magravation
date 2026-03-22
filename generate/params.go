@@ -44,7 +44,7 @@ func DefaultParams() Params {
 		DepthPerPass: 0.125,
 
 		TextDepth:  0.03,
-		TextHeight: 0.5,
+		TextHeight: 0, // 0 = auto-size (50% of c-to-c distance)
 
 		SafeZ:      0.5,
 		ClearanceZ: 0.1,
