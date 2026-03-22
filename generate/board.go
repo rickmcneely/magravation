@@ -303,10 +303,17 @@ func (b *Board) addBoardText(d float64) {
 	n := b.Params.NumPlayers
 
 	// "Wahoo!" between m and 0 on each player station, at the C radius.
-	// Text is centered on the arm direction at the connector circle distance,
-	// rotated so it reads from the player's perspective (facing inward).
-	cLocalY := 2.0 / math.Tan(math.Pi/float64(n)) // C position y in arm-local grid cells
-	textR := cLocalY * d                            // physical distance from center
+	// Centered horizontally on the m position (x=0 in arm-local).
+	// Bottom of text faces m (player side), top faces center.
+	cLocalY := 2.0 / math.Tan(math.Pi/float64(n))
+	textR := cLocalY * d // distance from center (same as C positions)
+
+	// Font height: sized so text width >= 50% of c-to-c distance (4d).
+	// TextWidth("Wahoo!", h) = sum_of_glyph_widths * h.
+	// Solve: TextWidth("Wahoo!", h) >= 0.5 * 4 * d → h = 2d / TextWidth("Wahoo!", 1)
+	minWidth := 0.5 * 4 * d
+	unitWidth := TextWidth("Wahoo!", 1.0) // width at height=1
+	textHeight := minWidth / unitWidth
 
 	armAngles := make([]float64, n)
 	for i := 0; i < n; i++ {
@@ -317,14 +324,17 @@ func (b *Board) addBoardText(d float64) {
 		rad := angle * math.Pi / 180
 		tx := textR * math.Cos(rad)
 		ty := textR * math.Sin(rad)
-		// Rotation: text baseline perpendicular to arm direction,
-		// readable from the player's side (facing toward center).
-		// The arm points at 'angle' degrees. Text should read left-to-right
-		// when viewed from the player's position (outside looking in).
-		textAngle := angle - 90 // rotate so text is perpendicular to arm
+		// Text reads left-to-right when viewed from the player's position
+		// (sitting outside the board, looking toward center).
+		// The arm points at 'angle' from center outward.
+		// Player faces inward → text baseline perpendicular to arm,
+		// bottom toward player (m side), top toward center (0 side).
+		// Rotation = angle + 90° makes text baseline cross the arm,
+		// readable from the player's side.
+		textAngle := angle + 90
 		b.TextItems = append(b.TextItems, TextItem{
 			X: tx, Y: ty, Text: "Wahoo!",
-			Height:   b.Params.TextHeight * 0.4,
+			Height:   textHeight,
 			Angle:    textAngle,
 			CenterOn: true,
 		})

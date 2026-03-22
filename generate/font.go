@@ -162,7 +162,37 @@ func init() {
 			{{0.05, 1}, {0.05, 0.8}},
 			{{0.25, 1}, {0.25, 0.8}},
 		}},
+		'!': {Width: 0.2, Strokes: [][]point{
+			{{0.1, 1}, {0.1, 0.3}},
+			{{0.1, 0.1}, {0.1, 0}},
+		}},
+		'a': {Width: 0.55, Strokes: [][]point{
+			{{0.45, 0.5}, {0.3, 0.55}, {0.1, 0.45}, {0.05, 0.25}, {0.15, 0.05}, {0.35, 0}, {0.5, 0.1}, {0.55, 0.25}},
+			{{0.55, 0.55}, {0.55, 0}},
+		}},
+		'h': {Width: 0.55, Strokes: [][]point{
+			{{0, 1}, {0, 0}},
+			{{0, 0.4}, {0.15, 0.55}, {0.35, 0.55}, {0.5, 0.4}, {0.55, 0.2}, {0.55, 0}},
+		}},
+		'o': {Width: 0.55, Strokes: [][]point{
+			{{0.2, 0}, {0.05, 0.1}, {0, 0.25}, {0.05, 0.45}, {0.2, 0.55}, {0.35, 0.55}, {0.5, 0.45}, {0.55, 0.25}, {0.5, 0.1}, {0.35, 0}, {0.2, 0}},
+		}},
 	}
+}
+
+// TextWidth returns the physical width of a string at a given height.
+func TextWidth(text string, height float64) float64 {
+	spacing := 0.15
+	totalWidth := 0.0
+	for _, ch := range text {
+		g, ok := strokeFont[ch]
+		if !ok {
+			g = strokeFont[' ']
+		}
+		totalWidth += g.Width + spacing
+	}
+	totalWidth -= spacing
+	return totalWidth * height
 }
 
 // TextToStrokes converts a string to physical stroke paths.
