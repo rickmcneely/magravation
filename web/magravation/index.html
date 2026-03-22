@@ -129,7 +129,6 @@
                         </select>
                     </div>
 
-                    <div id="error"></div>
                 </div>
 
                 <div class="panel" style="margin-top: 16px;">
@@ -144,10 +143,11 @@
                     </div>
                     <div class="btn-group">
                         <button class="btn btn-primary" onclick="downloadGCode()">Download .nc</button>
-                        <button class="btn btn-secondary" onclick="copyGCode()">Copy .nc</button>
+                        <button class="btn btn-secondary" onclick="copyGCode(this)">Copy .nc</button>
                         <button class="btn btn-secondary" onclick="downloadSVG()">Download SVG</button>
-                        <button class="btn btn-secondary" onclick="copySVG()">Copy SVG</button>
+                        <button class="btn btn-secondary" onclick="copySVG(this)">Copy SVG</button>
                     </div>
+                    <div id="error"></div>
                 </div>
 
                 <div class="panel" style="margin-top: 16px;">
@@ -375,7 +375,7 @@
             } catch (err) { showError('Network error: ' + err.message); }
         }
 
-        async function copyGCode() {
+        async function copyGCode(btn) {
             showError('');
             const params = getParams();
             try {
@@ -387,15 +387,13 @@
                 if (!resp.ok) { showError(await resp.text()); return; }
                 const text = await resp.text();
                 await navigator.clipboard.writeText(text);
-                showError(''); // clear any previous error
-                const btn = event.target;
                 const orig = btn.textContent;
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = orig, 1500);
             } catch (err) { showError('Copy failed: ' + err.message); }
         }
 
-        async function copySVG() {
+        async function copySVG(btn) {
             showError('');
             const params = getParams();
             try {
@@ -407,7 +405,6 @@
                 if (!resp.ok) { showError(await resp.text()); return; }
                 const svg = await resp.text();
                 await navigator.clipboard.writeText(svg);
-                const btn = event.target;
                 const orig = btn.textContent;
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = orig, 1500);
