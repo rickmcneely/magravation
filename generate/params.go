@@ -11,30 +11,25 @@ type Params struct {
 	MarbleDiameter float64 // marble diameter (inches)
 	NumPlayers     int     // 3 to 6
 
-	// Tool definitions
 	BallEndDiameter float64 // ball end mill diameter (inches)
 	VBitAngle       float64 // V-bit included angle (degrees)
 
-	// Speeds and feeds
-	SpindleSpeed int     // RPM
-	FeedRateXY   float64 // horizontal feed (ipm)
-	FeedRateZ    float64 // plunge feed (ipm)
-	DepthPerPass float64 // max depth per pass (inches)
+	SpindleSpeed int
+	FeedRateXY   float64
+	FeedRateZ    float64
+	DepthPerPass float64
 
-	// Text
-	TextDepth  float64 // depth for V-bit text engraving (inches)
-	TextHeight float64 // character height for text (inches)
+	TextDepth  float64
+	TextHeight float64
 
-	// Heights
-	SafeZ      float64 // safe retract height (inches)
-	ClearanceZ float64 // clearance plane above work (inches)
+	SafeZ      float64
+	ClearanceZ float64
 }
 
-// DefaultParams returns sensible defaults for hardwood aggravation board.
 func DefaultParams() Params {
 	return Params{
 		BoardDiameter:  20.0,
-		MarbleDiameter: 0.625, // 5/8"
+		MarbleDiameter: 0.625,
 		NumPlayers:     4,
 
 		BallEndDiameter: 0.25,
@@ -53,49 +48,44 @@ func DefaultParams() Params {
 	}
 }
 
-// GridSpacing returns the distance between adjacent grid cells (1.75 * marble diameter).
-func (p Params) GridSpacing() float64 {
-	return 1.75 * p.MarbleDiameter
+func (p Params) GridSpacing() float64  { return 1.75 * p.MarbleDiameter }
+func (p Params) EdgeMargin() float64   { return 2.5 * p.MarbleDiameter }
+func (p Params) HoleDiameter() float64 { return p.MarbleDiameter }
+func (p Params) HoleDepth() float64    { return p.MarbleDiameter / 4.0 }
+
+// ConnectorCircleRadius returns the radius (in grid cells) of the circle
+// formed by the C (center connector) positions. Sized so the chord between
+// adjacent C positions equals 4 grid cells (the c-to-c distance in a station).
+//   R = 2 / sin(π/N)
+func ConnectorCircleRadius(n int) float64 {
+	return 2.0 / math.Sin(math.Pi/float64(n))
 }
 
-// EdgeMargin returns the distance from outermost marble center to board edge (2.5 * marble diameter).
-func (p Params) EdgeMargin() float64 {
-	return 2.5 * p.MarbleDiameter
+// StationBaseY returns the y-coordinate (in grid cells from center) of the
+// base row for an arm in an N-player layout. The station extends from the
+// connector circle outward: C → c (1 cell) → 3 rows → base row (4 cells).
+//   baseY = 2/tan(π/N) + 5
+func StationBaseY(n int) float64 {
+	return 2.0/math.Tan(math.Pi/float64(n)) + 5.0
 }
 
-// HoleDiameter returns the pocket opening diameter (matches marble).
-func (p Params) HoleDiameter() float64 {
-	return p.MarbleDiameter
-}
-
-// HoleDepth returns the pocket depth (marbleRadius / 2 = marbleDiameter / 4).
-func (p Params) HoleDepth() float64 {
-	return p.MarbleDiameter / 4.0
-}
-
-// MaxRadius returns the distance from board center to the farthest hole.
-// The farthest holes are base row corner positions at (±2, 7) in arm-local
-// grid coordinates = sqrt(4+49) ≈ 7.28 grid cells from center.
-// This is the same for all player counts.
-func (p Params) MaxRadius() float64 {
-	return math.Sqrt(4+49) * p.GridSpacing()
-}
-
-// MinBoardDiameterForPlayers returns the minimum board diameter for a given
-// player count and marble diameter.
-func MinBoardDiameterForPlayers(numPlayers int, marbleDiameter float64) float64 {
+// MaxRadiusForPlayers returns the distance (inches) from board center to the
+// farthest hole. The farthest holes are the base row corners at (±2, baseY).
+func MaxRadiusForPlayers(numPlayers int, marbleDiameter float64) float64 {
 	d := 1.75 * marbleDiameter
-	em := 2.5 * marbleDiameter
-	maxR := math.Sqrt(4+49) * d // base row corners at sqrt(53) grid cells
-	return 2 * (maxR + em)
+	baseY := StationBaseY(numPlayers)
+	return math.Sqrt(4+baseY*baseY) * d
 }
 
-// MinBoardDiameter returns the minimum board diameter for this config.
+func MinBoardDiameterForPlayers(numPlayers int, marbleDiameter float64) float64 {
+	em := 2.5 * marbleDiameter
+	return 2 * (MaxRadiusForPlayers(numPlayers, marbleDiameter) + em)
+}
+
 func (p Params) MinBoardDiameter() float64 {
 	return MinBoardDiameterForPlayers(p.NumPlayers, p.MarbleDiameter)
 }
 
-// Validate checks that parameters are physically reasonable.
 func (p Params) Validate() error {
 	if p.BoardDiameter < 10 {
 		return fmt.Errorf("board diameter %.1f\" is too small (min 10\")", p.BoardDiameter)
@@ -109,8 +99,8 @@ func (p Params) Validate() error {
 
 	minDiam := p.MinBoardDiameter()
 	if p.BoardDiameter < minDiam-0.1 {
-		return fmt.Errorf("board diameter %.1f\" too small for %.3f\" marbles (need at least %.1f\")",
-			p.BoardDiameter, p.MarbleDiameter, minDiam)
+		return fmt.Errorf("board diameter %.1f\" too small for %d players with %.3f\" marbles (need at least %.1f\")",
+			p.BoardDiameter, p.NumPlayers, p.MarbleDiameter, minDiam)
 	}
 
 	return nil
